@@ -1,6 +1,6 @@
-# Launchbase App
+# WeekCurve App
 
-The Launchbase frontend — a [TanStack Start](https://tanstack.com/start)
+The WeekCurve customer planning frontend — a [TanStack Start](https://tanstack.com/start)
 single-page app.
 
 ## Architecture

@@ -1,6 +1,12 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, LogOut, Users } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  Users,
+  Building2,
+  Sparkles,
+} from "lucide-react";
 import { logout } from "@/api/endpoints/auth/auth";
 import { useCurrentUser } from "@/contexts/user-context";
 import { Logo } from "@/components/Logo";
@@ -12,6 +18,8 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { href: "/users", label: "Users", icon: Users },
+  { href: "/organizations", label: "Organizations", icon: Building2 },
+  { href: "/ai-usage", label: "AI usage", icon: Sparkles },
 ] as const;
 
 export function Sidebar() {
@@ -36,12 +44,15 @@ export function Sidebar() {
     `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase();
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r bg-background">
+    <aside className="hidden h-screen w-64 shrink-0 flex-col border-r bg-background md:flex">
       <div className="flex h-16 items-center px-6">
-        <Link to="/dashboard" aria-label="Launchbase">
+        <Link to="/dashboard" aria-label="WeekCurve internal">
           <Logo className="h-7" />
         </Link>
       </div>
+      <p className="px-6 pb-3 text-xs font-semibold uppercase tracking-widest text-muted-foreground">
+        Internal · platform staff
+      </p>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
         {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
@@ -91,5 +102,26 @@ export function Sidebar() {
         </Button>
       </div>
     </aside>
+  );
+}
+
+export function MobileNav() {
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const signOut = useMutation({ mutationFn: () => logout(), onSettled: () => { queryClient.clear(); navigate({ to: "/login" }); } });
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 gap-1 border-t bg-background p-2 shadow-lg md:hidden">
+      {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+        <Link
+          key={href}
+          to={href}
+          className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground hover:bg-muted"
+        >
+          <Icon className="mb-1 size-4" />
+          {label}
+        </Link>
+      ))}
+      <button type="button" className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground" disabled={signOut.isPending} onClick={() => signOut.mutate()}><LogOut className="mb-1 size-4" />Sign out</button>
+    </nav>
   );
 }

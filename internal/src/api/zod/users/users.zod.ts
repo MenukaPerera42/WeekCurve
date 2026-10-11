@@ -74,7 +74,6 @@ export const userCreateBodyLastNameMax = 100;
 
 export const userCreateBodyPasswordMin = 8;
 
-export const userCreateBodyIsAdminDefault = false;
 export const userCreateBodyIsActiveDefault = true;
 
 export const UserCreateBody = zod.object({
@@ -82,7 +81,6 @@ export const UserCreateBody = zod.object({
   last_name: zod.string().min(1).max(userCreateBodyLastNameMax),
   email: zod.string().email(),
   password: zod.string().min(userCreateBodyPasswordMin),
-  is_admin: zod.boolean().default(userCreateBodyIsAdminDefault),
   is_active: zod.boolean().default(userCreateBodyIsActiveDefault),
 });
 
@@ -116,7 +114,6 @@ export const UserUpdateBody = zod.object({
     .union([zod.string().min(1).max(userUpdateBodyLastNameOneMax), zod.null()])
     .optional(),
   email: zod.union([zod.string().email(), zod.null()]).optional(),
-  is_admin: zod.union([zod.boolean(), zod.null()]).optional(),
   is_active: zod.union([zod.boolean(), zod.null()]).optional(),
 });
 
@@ -154,3 +151,50 @@ export const UserChangePasswordBody = zod.object({
 });
 
 export const UserChangePasswordResponse = zod.void();
+
+/**
+ * @summary Search Users
+ */
+export const searchUsersQueryQDefault = ``;
+export const searchUsersQueryQMax = 120;
+
+export const searchUsersQueryLimitDefault = 50;
+export const searchUsersQueryLimitMax = 100;
+
+export const SearchUsersQueryParams = zod.object({
+  q: zod.string().max(searchUsersQueryQMax).default(searchUsersQueryQDefault),
+  limit: zod
+    .number()
+    .int()
+    .min(1)
+    .max(searchUsersQueryLimitMax)
+    .default(searchUsersQueryLimitDefault),
+});
+
+export const SearchUsersResponseItem = zod.object({
+  id: zod.string().uuid(),
+  email: zod.string(),
+  first_name: zod.string(),
+  last_name: zod.string(),
+  is_active: zod.boolean(),
+  is_admin: zod.boolean(),
+  organizations: zod.array(zod.string()),
+});
+export const SearchUsersResponse = zod.array(SearchUsersResponseItem);
+
+/**
+ * @summary Deactivate User
+ */
+export const DeactivateUserParams = zod.object({
+  user_id: zod.string().uuid(),
+});
+
+export const DeactivateUserResponse = zod.object({
+  id: zod.string().uuid(),
+  email: zod.string(),
+  first_name: zod.string(),
+  last_name: zod.string(),
+  is_active: zod.boolean(),
+  is_admin: zod.boolean(),
+  organizations: zod.array(zod.string()),
+});

@@ -11,7 +11,7 @@ class AuthRequest(Model):
 
 
 class AuthResponse(Model):
-    access_token: str
+    authenticated: bool
 
 
 class InternalUserResponse(Model):
@@ -37,7 +37,6 @@ class UserCreateRequest(Model):
     last_name: str = Field(min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(min_length=8)
-    is_admin: bool = False
     is_active: bool = True
 
 
@@ -45,7 +44,6 @@ class UserUpdateRequest(Model):
     first_name: str | None = Field(default=None, min_length=1, max_length=100)
     last_name: str | None = Field(default=None, min_length=1, max_length=100)
     email: EmailStr | None = None
-    is_admin: bool | None = None
     is_active: bool | None = None
 
 

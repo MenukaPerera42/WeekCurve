@@ -1,6 +1,6 @@
-# Launchbase API
+# WeekCurve API
 
-The Launchbase backend — a SaaS-shaped Python service built on FastAPI.
+The WeekCurve backend: tenant-scoped planning and staff operations on FastAPI.
 
 ## Requirements
 
@@ -10,7 +10,7 @@ The Launchbase backend — a SaaS-shaped Python service built on FastAPI.
 
 ## Quick start
 
-Instructions assume Ubuntu 24.04.
+On macOS Apple Silicon, use Homebrew PostgreSQL 16 and a Python 3.12 environment managed by uv.
 
 From the repo root:
 
@@ -18,7 +18,7 @@ From the repo root:
 cd api
 uv sync                                  # create venv + install deps (incl. dev group)
 cp .env.example .env                     # then edit values
-createdb launchbase                      # or use psql / pgAdmin
+createdb weekcurve                       # or use psql / pgAdmin
 uv run alembic upgrade head              # apply migrations
 uv run fastapi dev                       # http://localhost:8000
 ```
@@ -46,7 +46,7 @@ uv run alembic revision --autogenerate -m "describe change"
 uv run alembic upgrade head
 ```
 
-### Create an admin user
+### Create a platform staff user
 ```bash
 uv run manage.py create-user \
   --first-name Admin \
@@ -61,8 +61,18 @@ The login password is generated and printed unless you pass `--password`.
 uv run manage.py --help
 ```
 
+### Seed local demo data
+```bash
+uv run manage.py seed-demo --password 'choose-a-long-local-password'
+```
+The command is idempotent and refuses to run in production. It creates two
+organizations, teams, owner/admin/lead/member accounts, and several weeks of
+plans. It never creates a platform staff account; use `create-user --admin`
+for that. `GOOGLE_API_KEY` is optional for local planning and tests.
+
 ### Lint & type-check
 From the repo root:
 ```bash
-uv run --project api pre-commit run --all-files
+uv run ruff check app tests
+uv run pyright
 ```

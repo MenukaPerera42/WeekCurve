@@ -47,6 +47,7 @@ async def auth(
 
     if (
         user
+        and user.is_active
         and user.password is not None
         and verify_password(auth_request.password, user.password)
     ):
@@ -56,12 +57,13 @@ async def auth(
         response.set_cookie(
             key="access_token",
             value=f"Bearer {access_token}",
+            path="/app",
             samesite="lax",
             secure=settings.SECURE_COOKIE,
             httponly=True,
             max_age=settings.ACCESS_TOKEN_EXPIRE_MINUTES * 60,  # Convert to seconds
         )
-        return AuthResponse(access_token=access_token)
+        return AuthResponse(authenticated=True)
     raise APIException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         code="INVALID_CREDENTIALS",
@@ -71,5 +73,5 @@ async def auth(
 
 @router.post("/logout", tags=["auth"])
 async def logout(response: Response) -> MessageResponse:
-    response.delete_cookie("access_token")
+    response.delete_cookie("access_token", path="/app")
     return MessageResponse(message="Successfully logged out")

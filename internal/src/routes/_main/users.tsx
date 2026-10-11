@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   MoreHorizontal,
   Plus,
@@ -8,7 +9,11 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
-import { useUserList } from "@/api/endpoints/users/users";
+import {
+  useUserList,
+  searchUsers,
+  deactivateUser,
+} from "@/api/endpoints/users/users";
 import type { InternalUserResponse } from "@/api/model";
 import { useCurrentUser } from "@/contexts/user-context";
 import { UserFormDialog } from "@/components/users/user-form-dialog";
@@ -17,6 +22,7 @@ import { DeleteUserDialog } from "@/components/users/delete-user-dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Input } from "@/components/ui/input";
 import {
   Table,
   TableBody,
@@ -47,6 +53,20 @@ export const Route = createFileRoute("/_main/users")({ component: UsersPage });
 
 function UsersPage() {
   const currentUser = useCurrentUser();
+  const queryClient = useQueryClient();
+  const [search, setSearch] = useState("");
+  const matches = useQuery({
+    queryKey: ["user-search", search],
+    queryFn: () => searchUsers({ q: search, limit: 50 }),
+    enabled: search.trim().length > 0,
+  });
+  const deactivate = useMutation({
+    mutationFn: (id: string) => deactivateUser(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["user-search"] });
+      queryClient.invalidateQueries({ queryKey: ["/users"] });
+    },
+  });
   const [page, setPage] = useState(0);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -84,6 +104,60 @@ function UsersPage() {
           <Plus className="size-4" />
           Add user
         </Button>
+      </div>
+
+      <div className="rounded-xl border bg-background p-4">
+        <label className="text-sm font-medium" htmlFor="user-search">
+          Search users and their organizations
+        </label>
+        <Input
+          id="user-search"
+          className="mt-2"
+          placeholder="Name or email"
+          value={search}
+          onChange={(event) => setSearch(event.target.value)}
+        />
+        {matches.isLoading && <p className="mt-3 text-sm">Searching…</p>}
+        {matches.isError && (
+          <p className="mt-3 text-sm text-destructive">Search failed.</p>
+        )}
+        {search && matches.data?.length === 0 && (
+          <p className="mt-3 text-sm text-muted-foreground">
+            No matching users.
+          </p>
+        )}
+        {matches.data?.map((match) => (
+          <div
+            key={match.id}
+            className="flex flex-wrap items-center justify-between gap-3 border-b py-3 text-sm"
+          >
+            <div>
+              <p className="font-medium">
+                {match.first_name} {match.last_name} · {match.email}
+              </p>
+              <p className="text-muted-foreground">
+                Organizations: {match.organizations.join(", ") || "None"} ·{" "}
+                {match.is_active ? "Active" : "Inactive"}
+              </p>
+            </div>
+            {match.is_active && match.id !== currentUser?.id && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="cursor-pointer"
+                disabled={deactivate.isPending}
+                onClick={() => deactivate.mutate(match.id)}
+              >
+                Deactivate
+              </Button>
+            )}
+          </div>
+        ))}
+        {deactivate.isError && (
+          <p className="mt-2 text-sm text-destructive">
+            Could not deactivate this user.
+          </p>
+        )}
       </div>
 
       <div className="rounded-xl border bg-background">

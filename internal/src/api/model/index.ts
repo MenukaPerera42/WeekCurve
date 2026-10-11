@@ -6,15 +6,19 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from "./aIUsageSummary";
 export * from "./authRequest";
 export * from "./authResponse";
 export * from "./healthCheckResponse";
 export * from "./hTTPValidationError";
 export * from "./internalUserResponse";
 export * from "./messageResponse";
+export * from "./organizationSummary";
+export * from "./searchUsersParams";
 export * from "./userChangePasswordRequest";
 export * from "./userCreateRequest";
 export * from "./userListParams";
+export * from "./userSearchItem";
 export * from "./usersListResponse";
 export * from "./userUpdateRequest";
 export * from "./validationError";

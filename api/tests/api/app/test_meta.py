@@ -41,7 +41,8 @@ async def test_auth_success(async_client, session_factory):
 
     assert response.status_code == 200
     data = response.json()
-    assert "access_token" in data
+    assert data["authenticated"] is True
+    assert "access_token" in response.cookies
 
 
 @pytest.mark.asyncio

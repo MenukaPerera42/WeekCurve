@@ -16,7 +16,7 @@ export const AuthBody = zod.object({
 });
 
 export const AuthResponse = zod.object({
-  access_token: zod.string(),
+  authenticated: zod.boolean(),
 });
 
 /**

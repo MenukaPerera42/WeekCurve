@@ -1,16 +1,26 @@
 import { Link, useLocation, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { LayoutDashboard, LogOut } from "lucide-react";
+import {
+  LayoutDashboard,
+  LogOut,
+  ListTodo,
+  UsersRound,
+  Settings,
+} from "lucide-react";
 import { logout } from "@/api/endpoints/auth/auth";
 import { useCurrentUser } from "@/contexts/user-context";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useOrganization } from "@/contexts/organization-context";
 
 // `as const` keeps the hrefs as literal types, so TanStack Router can
 // type-check them against the generated route tree.
 const NAV_ITEMS = [
   { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { href: "/plans", label: "My plans", icon: ListTodo },
+  { href: "/teams", label: "Teams", icon: UsersRound },
+  { href: "/settings", label: "Organization", icon: Settings },
 ] as const;
 
 export function Sidebar() {
@@ -18,6 +28,7 @@ export function Sidebar() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const user = useCurrentUser();
+  const { organization, organizations, selectOrganization } = useOrganization();
 
   const logoutMutation = useMutation({
     mutationFn: async () => {
@@ -35,11 +46,32 @@ export function Sidebar() {
     `${user.first_name.charAt(0)}${user.last_name.charAt(0)}`.toUpperCase();
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r bg-background">
+    <aside className="hidden h-screen w-64 shrink-0 flex-col border-r bg-background md:flex">
       <div className="flex h-16 items-center px-6">
-        <Link to="/dashboard" aria-label="Launchbase">
+        <Link to="/dashboard" aria-label="WeekCurve">
           <Logo className="h-7" />
         </Link>
+      </div>
+
+      <div className="px-3 pb-3">
+        <label
+          htmlFor="organization-switcher"
+          className="mb-1 block px-2 text-xs text-muted-foreground"
+        >
+          Organization
+        </label>
+        <select
+          id="organization-switcher"
+          className="w-full rounded-md border bg-background px-2 py-2 text-sm cursor-pointer"
+          value={organization?.id ?? ""}
+          onChange={(event) => selectOrganization(event.target.value)}
+        >
+          {organizations.map((org) => (
+            <option key={org.id} value={org.id}>
+              {org.name}
+            </option>
+          ))}
+        </select>
       </div>
 
       <nav className="flex-1 space-y-1 px-3 py-4">
@@ -90,5 +122,41 @@ export function Sidebar() {
         </Button>
       </div>
     </aside>
+  );
+}
+
+export function MobileNav() {
+  const { organization, organizations, selectOrganization } = useOrganization();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const signOut = useMutation({ mutationFn: () => logout(), onSettled: () => { queryClient.clear(); navigate({ to: "/login" }); } });
+  return (
+    <div className="fixed inset-x-0 bottom-0 z-50 border-t bg-white p-2 shadow-lg md:hidden">
+      <select
+        aria-label="Organization"
+        className="mb-1 w-full rounded-md border bg-white px-2 py-1 text-xs cursor-pointer"
+        value={organization?.id ?? ""}
+        onChange={(e) => selectOrganization(e.target.value)}
+      >
+        {organizations.map((org) => (
+          <option key={org.id} value={org.id}>
+            {org.name}
+          </option>
+        ))}
+      </select>
+      <nav className="grid grid-cols-5 gap-1">
+        {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+          <Link
+            key={href}
+            to={href}
+            className="flex cursor-pointer flex-col items-center rounded-md px-1 py-1 text-[11px] text-[#243A59] hover:bg-[#F7F9FC]"
+          >
+            <Icon className="mb-1 size-4" />
+            {label}
+          </Link>
+        ))}
+        <button type="button" className="flex cursor-pointer flex-col items-center rounded-md px-1 py-1 text-[11px] text-[#243A59]" disabled={signOut.isPending} onClick={() => signOut.mutate()}><LogOut className="mb-1 size-4" />Sign out</button>
+      </nav>
+    </div>
   );
 }

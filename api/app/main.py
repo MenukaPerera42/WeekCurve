@@ -33,6 +33,17 @@ app = FastAPI(
     redoc_url=redoc_url,
 )
 
+
+@app.middleware("http")
+async def protect_cookie_writes(request: Request, call_next):
+    if request.method not in {"GET", "HEAD", "OPTIONS"} and request.url.path.startswith(("/app/", "/internal/")):
+        cookie_name = "internal_access_token" if request.url.path.startswith("/internal/") else "access_token"
+        if cookie_name in request.cookies and "Access-Token" not in request.headers:
+            origin = request.headers.get("origin")
+            if origin not in settings.cors_origins_list and origin != str(request.base_url).rstrip("/"):
+                return APIException(403, "INVALID_ORIGIN", "Request origin is not allowed").to_response()
+    return await call_next(request)
+
 app_api = FastAPI(
     contact={"name": "Chamoda Pandithage", "email": "chamoda@xaventra.com"},
     description="App api endpoints",

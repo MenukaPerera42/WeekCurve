@@ -45,7 +45,7 @@ async def user_create(
     session: DBSession,
     data: UserCreateRequest,
 ) -> InternalUserResponse:
-    user = await UserService(session).create_user(**data.model_dump())
+    user = await UserService(session).create_user(**data.model_dump(), is_admin=False)
     await session.commit()
     return InternalUserResponse.model_validate(user)
 

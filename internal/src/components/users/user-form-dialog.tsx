@@ -46,7 +46,6 @@ const makeUserFormSchema = (isEdit: boolean) =>
           .string()
           .min(1, "Password is required")
           .min(8, "Password must be at least 8 characters"),
-    is_admin: z.boolean(),
     is_active: z.boolean(),
   });
 
@@ -57,7 +56,6 @@ const emptyValues: UserFormData = {
   last_name: "",
   email: "",
   password: "",
-  is_admin: false,
   is_active: true,
 };
 
@@ -94,7 +92,6 @@ export function UserFormDialog({
               last_name: user.last_name,
               email: user.email,
               password: "",
-              is_admin: user.is_admin,
               is_active: user.is_active,
             }
           : emptyValues
@@ -153,7 +150,6 @@ export function UserFormDialog({
           first_name: data.first_name,
           last_name: data.last_name,
           email: data.email,
-          is_admin: data.is_admin,
           is_active: data.is_active,
         },
       });
@@ -165,7 +161,6 @@ export function UserFormDialog({
         last_name: data.last_name,
         email: data.email,
         password: data.password,
-        is_admin: data.is_admin,
         is_active: data.is_active,
       },
     });
@@ -252,27 +247,6 @@ export function UserFormDialog({
                 )}
               />
             )}
-
-            <FormField
-              control={form.control}
-              name="is_admin"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-md border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Administrator</FormLabel>
-                    <FormDescription>
-                      Can sign in to this internal console.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch
-                      checked={field.value}
-                      onCheckedChange={field.onChange}
-                    />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
 
             <FormField
               control={form.control}

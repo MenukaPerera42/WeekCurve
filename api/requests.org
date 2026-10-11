@@ -77,7 +77,6 @@ Content-Type: application/json
   "last_name": "Doe",
   "email": "jane@example.com",
   "password": "secret123",
-  "is_admin": false,
   "is_active": true
 }
 
@@ -91,7 +90,7 @@ Content-Type: application/json
 
 {
   "last_name": "Smith",
-  "is_admin": true
+  "is_active": true
 }
 
 ** Change user password
@@ -108,4 +107,151 @@ Content-Type: application/json
 DELETE /users/{{(verb-var user-id)}}
 # Returns: 204 No Content (row hard-deleted)
 # Returns: 404 if not found
+# Returns: 409 if the user has organization history; deactivate instead
 # Requires: Internal authentication
+
+* WeekCurve customer API                                               :verb:
+Template http://localhost:8000/app
+# Supply an app-session cookie and Origin: http://localhost:3001 for writes.
+
+** Sign up with an organization
+POST /signup
+Content-Type: application/json
+{"first_name":"Jane","last_name":"Doe","email":"jane@example.com","password":"choose-a-long-password","organization_name":"Example Studio"}
+
+** Sign up through an invitation
+POST /signup
+Content-Type: application/json
+{"first_name":"Sam","last_name":"Member","email":"sam@example.com","password":"choose-a-long-password","invite_token":"TOKEN"}
+
+** Preview invitation
+GET /invitations/{{(verb-var invite-token)}}
+
+** Accept invitation as signed-in user
+POST /invitations/{{(verb-var invite-token)}}/accept
+
+** List current user's organizations
+GET /organizations
+
+** Get organization
+GET /organizations/{{(verb-var organization-id)}}
+
+** Rename organization
+PATCH /organizations/{{(verb-var organization-id)}}
+Content-Type: application/json
+{"name":"Example Studio"}
+
+** Invite member
+POST /organizations/{{(verb-var organization-id)}}/invitations
+Content-Type: application/json
+{"email":"sam@example.com","role":"member"}
+
+** List organization members
+GET /organizations/{{(verb-var organization-id)}}/members
+
+** Change member role
+PATCH /organizations/{{(verb-var organization-id)}}/members/{{(verb-var member-id)}}
+Content-Type: application/json
+{"role":"member"}
+
+** Remove member
+DELETE /organizations/{{(verb-var organization-id)}}/members/{{(verb-var member-id)}}
+
+** List teams
+GET /organizations/{{(verb-var organization-id)}}/teams
+
+** Create team
+POST /organizations/{{(verb-var organization-id)}}/teams
+Content-Type: application/json
+{"name":"Engineering"}
+
+** Rename team
+PATCH /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}
+Content-Type: application/json
+{"name":"Product Engineering"}
+
+** List team members
+GET /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/members
+
+** Add team member
+POST /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/members
+Content-Type: application/json
+{"member_id":"MEMBERSHIP_UUID","is_primary":false}
+
+** Remove team member
+DELETE /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/members/{{(verb-var member-id)}}
+
+** Set team lead
+PUT /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/lead/{{(verb-var member-id)}}
+
+** Set primary team
+PUT /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/primary/{{(verb-var member-id)}}
+
+** List my plans
+GET /organizations/{{(verb-var organization-id)}}/plans
+
+** Save a Monday draft
+PUT /organizations/{{(verb-var organization-id)}}/plans/weeks/2026-10-12
+Content-Type: application/json
+{"tasks":[{"kind":"main","text":"Checkout handles expired cards on staging","why_it_matters":"Customers can recover"},{"kind":"sub_goal","text":"Expired card tests pass"},{"kind":"go_to_market","text":"Publish release note"}]}
+
+** Read a plan
+GET /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}
+
+** Submit plan
+POST /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}/submit
+
+** Approve plan
+POST /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}/approve
+Content-Type: application/json
+{}
+
+** Send plan back
+POST /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}/send-back
+Content-Type: application/json
+{"comment":"State the outcome we can verify on Friday."}
+
+** Complete or reopen task
+PATCH /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}/tasks/{{(verb-var task-id)}}
+Content-Type: application/json
+{"is_done":true}
+
+** Finish week
+POST /organizations/{{(verb-var organization-id)}}/plans/{{(verb-var plan-id)}}/finish
+Content-Type: application/json
+{"main_shipped":true}
+
+** Team week
+GET /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/weeks/2026-10-12
+
+** AI review
+POST /organizations/{{(verb-var organization-id)}}/ai/review
+Content-Type: application/json
+{"tasks":[{"id":"task-1","kind":"main","text":"Implement checkout"}]}
+
+** AI draft from notes
+POST /organizations/{{(verb-var organization-id)}}/ai/draft
+Content-Type: application/json
+{"notes":"Finish billing, fix the webhook bug, publish release notes."}
+
+* WeekCurve platform API                                               :verb:
+Template http://localhost:8000/internal
+# Requires an internal-audience staff session.
+
+** List organizations and counts
+GET /organizations
+
+** Suspend organization
+POST /organizations/{{(verb-var organization-id)}}/suspend
+
+** Reinstate organization
+POST /organizations/{{(verb-var organization-id)}}/reinstate
+
+** Search users with memberships
+GET /users/search?q=jane
+
+** Deactivate account
+POST /users/{{(verb-var user-id)}}/deactivate
+
+** AI usage totals
+GET /ai-usage

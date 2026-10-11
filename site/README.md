@@ -1,14 +1,13 @@
-# Launchbase Site
+# WeekCurve Site
 
-The Launchbase landing page — a [TanStack Start](https://tanstack.com/start)
+The WeekCurve landing page — a [TanStack Start](https://tanstack.com/start)
 marketing site, statically generated and API-less. Unlike
 [`app/`](../app/README.md), there is no orval-generated API client
 here; it's just static pages and the full
 [shadcn/ui](https://ui.shadcn.com) component library.
 
-> The default `src/routes/index.tsx` is a placeholder starter — delete it and
-> build your real landing page. The shadcn/ui components under
-> `src/components/ui/` are pre-installed so you can move fast.
+The landing page links to the customer app through `VITE_APP_URL`. Set this
+to the customer app's public URL before deploying the static site.
 
 ## Architecture
 

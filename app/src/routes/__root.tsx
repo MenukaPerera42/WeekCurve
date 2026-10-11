@@ -11,12 +11,15 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Launchbase" },
-      { name: "description", content: "Launchbase app." },
+      { title: "WeekCurve — Plan the week. Ship the goal." },
+      {
+        name: "description",
+        content: "Plan your week, get team approval, and ship the goal.",
+      },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "icon", href: "/favicon.ico", sizes: "48x48" },
+      { rel: "icon", href: "/favicon.png", sizes: "32x32", type: "image/png" },
       { rel: "icon", href: "/icon.svg", type: "image/svg+xml" },
     ],
   }),

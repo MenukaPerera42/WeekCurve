@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="960" height="244" viewBox="0 0 960 244" role="img" aria-labelledby="title">
+  <title id="title">WeekCurve</title>
+  <rect x="2" y="2" width="220" height="220" rx="48" fill="#111C30"/>
+  <g fill="none" stroke="#DDE4ED" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M46 76 L78 168 L109 109 L142 168 L184 66"/>
+    <path d="M165 73 L184 63 L193 84"/>
+  </g>
+  <text x="226" y="174" fill="#111C30" font-family="Geist, Inter, Arial, sans-serif" font-size="170" font-weight="400" letter-spacing="-8">eekCurve</text>
+</svg>

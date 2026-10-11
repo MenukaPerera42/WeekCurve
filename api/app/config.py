@@ -17,7 +17,9 @@ class Settings(BaseSettings):
     SQLALCHEMY_ECHO: bool = False
     SECURE_COOKIE: bool = True
 
-    CORS_ORIGINS: str = "http://localhost:3000"
+    CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
+    GOOGLE_API_KEY: str | None = None
+    AI_TIMEOUT_SECONDS: float = 20.0
 
     # JWT Token settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
@@ -33,6 +35,8 @@ class Settings(BaseSettings):
             raise ValueError(
                 "SECRET_KEY cannot be empty. Set SECRET_KEY environment variable."
             )
+        if len(v) < 32:
+            raise ValueError("SECRET_KEY must contain at least 32 characters.")
         return v
 
     @field_validator("SQLALCHEMY_DATABASE_URI")

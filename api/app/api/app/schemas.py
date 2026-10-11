@@ -11,7 +11,7 @@ class AuthRequest(Model):
 
 
 class AuthResponse(Model):
-    access_token: str
+    authenticated: bool
 
 
 class UserResponse(Model):

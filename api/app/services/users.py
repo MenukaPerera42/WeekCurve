@@ -6,7 +6,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.exceptions import ConflictException, ResourceNotFoundException
-from app.models import User
+from app.models import OrganizationMembership, User
 from app.security import hash_password
 
 
@@ -106,6 +106,10 @@ class UserService:
     async def delete_user(self, user_id: uuid.UUID) -> None:
         """Hard-delete a user (row removed)."""
         user = await self.get_user(user_id)
+        membership = await self.session.scalar(select(OrganizationMembership.id).where(
+            OrganizationMembership.user_id == user_id))
+        if membership is not None:
+            raise ConflictException("Deactivate users with organization history instead")
         await self.session.delete(user)
         await self.session.flush()
 

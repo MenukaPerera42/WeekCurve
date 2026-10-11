@@ -16,7 +16,7 @@ export const AuthBody = zod.object({
 });
 
 export const AuthResponse = zod.object({
-  access_token: zod.string(),
+  authenticated: zod.boolean(),
 });
 
 /**
@@ -24,4 +24,44 @@ export const AuthResponse = zod.object({
  */
 export const LogoutResponse = zod.object({
   message: zod.string(),
+});
+
+/**
+ * @summary Signup
+ */
+export const signupBodyFirstNameMax = 100;
+
+export const signupBodyLastNameMax = 100;
+
+export const signupBodyPasswordMin = 12;
+export const signupBodyPasswordMax = 128;
+
+export const signupBodyOrganizationNameOneMin = 2;
+export const signupBodyOrganizationNameOneMax = 120;
+
+export const SignupBody = zod.object({
+  first_name: zod.string().min(1).max(signupBodyFirstNameMax),
+  last_name: zod.string().min(1).max(signupBodyLastNameMax),
+  email: zod.string().email(),
+  password: zod.string().min(signupBodyPasswordMin).max(signupBodyPasswordMax),
+  organization_name: zod
+    .union([
+      zod
+        .string()
+        .min(signupBodyOrganizationNameOneMin)
+        .max(signupBodyOrganizationNameOneMax),
+      zod.null(),
+    ])
+    .optional(),
+  invite_token: zod.union([zod.string(), zod.null()]).optional(),
+});
+
+export const SignupResponse = zod.object({
+  user_id: zod.string().uuid(),
+  organization: zod.object({
+    id: zod.string().uuid(),
+    name: zod.string(),
+    slug: zod.string(),
+    role: zod.string(),
+  }),
 });

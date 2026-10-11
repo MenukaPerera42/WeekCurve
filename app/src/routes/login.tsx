@@ -8,6 +8,8 @@ import { Eye, EyeOff, Lock, LogIn, Mail } from "lucide-react";
 import { auth } from "@/api/endpoints/auth/auth";
 import { ApiError } from "@/lib/api-client";
 import { Logo } from "@/components/Logo";
+import { Link } from "@tanstack/react-router";
+import { acceptInvite } from "@/api/endpoints/organizations/organizations";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -44,8 +46,22 @@ function Login() {
 
   const loginMutation = useMutation({
     mutationFn: (data: LoginFormData) => auth(data),
-    onSuccess: () => {
+    onSuccess: async () => {
       setLoginError("");
+      const inviteToken = new URLSearchParams(window.location.search).get(
+        "invite"
+      );
+      if (inviteToken) {
+        try {
+          const joined = await acceptInvite(inviteToken);
+          localStorage.setItem("weekcurve.organization", joined.id);
+        } catch {
+          setLoginError(
+            "Signed in, but the invitation could not be accepted. Check the email or ask for a new link."
+          );
+          return;
+        }
+      }
       // Clear cached data so no prior session leaks into the new one.
       queryClient.clear();
       navigate({ to: "/" });
@@ -85,7 +101,7 @@ function Login() {
               Welcome back
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
-              Sign in to your Launchbase console.
+              Sign in to WeekCurve.
             </p>
           </div>
         </div>
@@ -173,7 +189,11 @@ function Login() {
         </div>
 
         <p className="mt-8 text-center text-xs text-muted-foreground">
-          Trouble signing in? Contact your administrator.
+          New to WeekCurve?{" "}
+          <Link to="/signup" className="underline">
+            Create an account
+          </Link>
+          .
         </p>
       </div>
     </div>

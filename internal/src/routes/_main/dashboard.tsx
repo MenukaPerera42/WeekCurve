@@ -25,7 +25,8 @@ function DashboardPage() {
           Welcome{user ? `, ${user.first_name}` : ""}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          You&apos;re signed in to the Launchbase internal console.
+          WeekCurve platform operations. Customer plan text stays in the
+          customer app.
         </p>
       </div>
 
