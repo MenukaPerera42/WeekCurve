@@ -77,7 +77,7 @@ function TeamsPage() {
     queryClient.invalidateQueries({ queryKey: ["team-plan", orgId] });
   };
   const create = useMutation({
-    mutationFn: () => createTeam(orgId, { name: newName }),
+    mutationFn: () => createTeam(orgId, { name: newName.trim() }),
     onSuccess: (team) => {
       setNewName("");
       setTeamId(team.id);
@@ -122,7 +122,6 @@ function TeamsPage() {
     },
   });
   const error =
-    create.error ||
     add.error ||
     lead.error ||
     primary.error ||
@@ -147,6 +146,7 @@ function TeamsPage() {
                 className="mt-3 flex gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!orgId || create.isPending || newName.trim().length < 2) return;
                   create.mutate();
                 }}
               >
@@ -154,15 +154,27 @@ function TeamsPage() {
                   aria-label="New team name"
                   placeholder="Engineering"
                   value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                  onChange={(e) => {
+                    setNewName(e.target.value);
+                    if (create.isError) create.reset();
+                  }}
                 />
                 <Button
+                  type="submit"
                   className="cursor-pointer"
-                  disabled={!newName.trim() || create.isPending}
+                  disabled={newName.trim().length < 2 || create.isPending}
                 >
                   Create
                 </Button>
               </form>
+              {create.isError && (
+                <p role="alert" className="mt-2 text-sm text-red-700">
+                  {create.error instanceof ApiError
+                    ? (create.error.data as { detail?: { msg?: string }[] } | undefined)
+                        ?.detail?.[0]?.msg ?? "Could not create the team. Please try again."
+                    : "Network error. Please try again."}
+                </p>
+              )}
             </section>
           )}
           <section className="rounded-xl border bg-white p-5">
