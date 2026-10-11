@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 220 220">
+  <title>WeekCurve favicon icon — white background with blue W arrow</title>
+  <desc>Rounded square white favicon with a dark blue W ending in an upward arrow.</desc>
+  <rect x="2" y="2" width="216" height="216" rx="45" fill="#FFFFFF" stroke="#DDE4ED" stroke-width="4"/>
+  <g fill="none" stroke="#111C30" stroke-width="16" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M44 74 L76 166 L107 107 L140 166 L182 64"/>
+    <path d="M163 71 L182 61 L191 82"/>
+  </g>
+</svg>
