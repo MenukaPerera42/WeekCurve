@@ -41,7 +41,7 @@ function SettingsPage() {
     },
   });
   const invite = useMutation({
-    mutationFn: () => createInvite(orgId, { email, role: inviteRole }),
+    mutationFn: () => createInvite(orgId, { email: email.trim(), role: inviteRole }),
     onSuccess: (result) => {
       setInviteToken(result.token);
       setCopied(false);
@@ -62,7 +62,7 @@ function SettingsPage() {
     ? `${window.location.origin}/signup?invite=${encodeURIComponent(inviteToken)}`
     : "";
   const error =
-    rename.error || invite.error || changeRole.error || remove.error;
+    rename.error || changeRole.error || remove.error;
 
   return (
     <div className="space-y-6">
@@ -181,6 +181,9 @@ function SettingsPage() {
                 className="mt-4 flex flex-wrap gap-2"
                 onSubmit={(e) => {
                   e.preventDefault();
+                  if (!orgId || invite.isPending || !email.trim()) return;
+                  setInviteToken("");
+                  setCopied(false);
                   invite.mutate();
                 }}
               >
@@ -190,23 +193,41 @@ function SettingsPage() {
                   required
                   placeholder="teammate@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    if (invite.isError) invite.reset();
+                  }}
                 />
                 <select
                   aria-label="Invitation role"
                   className="rounded-md border bg-white px-3 cursor-pointer"
                   value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
+                  onChange={(e) => {
+                    setInviteRole(e.target.value);
+                    if (invite.isError) invite.reset();
+                  }}
                 >
                   <option value="member">Member</option>
                   {organization.role === "owner" && (
                     <option value="admin">Admin</option>
                   )}
                 </select>
-                <Button className="cursor-pointer" disabled={invite.isPending}>
+                <Button
+                  type="submit"
+                  className="cursor-pointer"
+                  disabled={!email.trim() || invite.isPending}
+                >
                   Create invite
                 </Button>
               </form>
+              {invite.isError && (
+                <p role="alert" className="mt-2 text-sm text-red-700">
+                  {invite.error instanceof ApiError
+                    ? (invite.error.data as { detail?: { msg?: string }[] } | undefined)
+                        ?.detail?.[0]?.msg ?? "Could not create the invitation. Please try again."
+                    : "Network error. Please try again."}
+                </p>
+              )}
               {invitationUrl && (
                 <div className="mt-4 rounded-lg border bg-[#F7F9FC] p-3">
                   <p className="text-sm font-medium">
