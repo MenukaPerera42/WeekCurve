@@ -29,6 +29,39 @@ def url(org_id, monday=date(2026, 10, 12)):
     return f"/app/organizations/{org_id}/ai/weeks/{monday}/look-back"
 
 
+@pytest.mark.asyncio
+async def test_runtime_failure_logs_safe_classification_without_changing_response(caplog):
+    class RecordingSession:
+        def __init__(self):
+            self.usage = []
+
+        def add(self, value):
+            self.usage.append(value)
+
+        async def flush(self):
+            pass
+
+    async def provider_failure(messages, info):
+        raise RuntimeError("private-plan-text-and-provider-detail")
+
+    session = RecordingSession()
+    with caplog.at_level("WARNING", logger=ai.logger.name):
+        with pytest.raises(APIException) as error:
+            await AIService(session, uuid.uuid4(), uuid.uuid4(),
+                            model=FunctionModel(provider_failure)).look_back(date(2026, 10, 12))
+
+    assert error.value.code == "AI_UNAVAILABLE"
+    assert error.value.message == "AI is unavailable right now. You can keep planning manually."
+    assert len(session.usage) == 1 and session.usage[0].outcome == "failure"
+    diagnostics = [record.getMessage() for record in caplog.records
+                   if record.getMessage().startswith("look_back_runtime_failure")]
+    assert diagnostics == [
+        "look_back_runtime_failure feature=look_back error_type=RuntimeError "
+        "tool_calls=0 history_plans=0 provider_status=None"
+    ]
+    assert "private-plan-text-and-provider-detail" not in diagnostics[0]
+
+
 @pytest.fixture
 async def lookback_case(session_factory):
     async with session_factory() as db:

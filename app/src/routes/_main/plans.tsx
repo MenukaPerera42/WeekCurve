@@ -544,7 +544,7 @@ function PlansPage() {
             </Button>
             {lookbackError && (
               <p className="mt-3 text-sm text-destructive" role="alert">
-                {lookbackError} You can keep planning manually.
+                {lookbackError}
               </p>
             )}
             {lookbackAdvice && (

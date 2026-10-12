@@ -392,6 +392,17 @@ class AIService:
                 response = getattr(exc, "response", None)
                 provider_status = getattr(response, "status_code", None)
             outcome = "rate_limited" if provider_status == 429 else "failure"
+            if feature == "look_back":
+                try:
+                    logger.warning(
+                        "look_back_runtime_failure feature=look_back error_type=%s "
+                        "tool_calls=%d history_plans=%d provider_status=%s",
+                        type(exc).__name__, deps.tool_calls if deps is not None else 0,
+                        len(deps.history or []) if deps is not None else 0,
+                        provider_status,
+                    )
+                except Exception:
+                    pass
             message = ("AI is busy. Try again later, or continue manually." if provider_status == 429
                        else "AI is unavailable right now. You can keep planning manually.")
             raise APIException(429 if provider_status == 429 else 503, "AI_UNAVAILABLE", message) from exc
