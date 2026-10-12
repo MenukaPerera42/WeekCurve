@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
   CalendarDays,
   CheckCircle2,
@@ -22,31 +22,55 @@ import {
   CartesianGrid,
   Tooltip,
   ResponsiveContainer,
+  Cell,
 } from "recharts";
 import { myPlans } from "@/api/endpoints/plans/plans";
 import { listTeams } from "@/api/endpoints/teams/teams";
 import { useCurrentUser } from "@/contexts/user-context";
 import { useOrganization } from "@/contexts/organization-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { buttonVariants } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_main/dashboard")({
   component: DashboardPage,
 });
 
-function thisMonday() {
+function thisMonday(): string {
   const day = new Date();
   day.setDate(day.getDate() - ((day.getDay() + 6) % 7));
   const part = (n: number) => String(n).padStart(2, "0");
   return `${day.getFullYear()}-${part(day.getMonth() + 1)}-${part(day.getDate())}`;
 }
 
+function getMonday(dateStr: string): string {
+  if (!dateStr) return thisMonday();
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day, 12, 0, 0);
+  const dayOfWeek = d.getDay();
+  const diff = (dayOfWeek + 6) % 7;
+  d.setDate(d.getDate() - diff);
+  const part = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${part(d.getMonth() + 1)}-${part(day.getDate())}`;
+}
+
+function formatWeekDisplay(dateStr: string): string {
+  if (!dateStr) return "";
+  const [year, month, day] = dateStr.split("-").map(Number);
+  const d = new Date(year, month - 1, day, 12, 0, 0);
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function DashboardPage() {
   const user = useCurrentUser();
   const { organization, isLoading: isOrgLoading, isError: isOrgError } = useOrganization();
   const orgId = organization?.id ?? "";
-  const currentWeek = useMemo(() => thisMonday(), []);
+  const currentMonday = useMemo(() => thisMonday(), []);
+  const [selectedWeek, setSelectedWeek] = useState<string>(thisMonday);
 
   // Fetch all user plans
   const plans = useQuery({
@@ -62,12 +86,20 @@ function DashboardPage() {
     enabled: !!orgId,
   });
 
-  // Current active plan for this week
-  const currentPlan = useMemo(() => {
-    return plans.data?.find((p) => p.week_start === currentWeek);
-  }, [plans.data, currentWeek]);
+  // All distinct recorded plan weeks sorted descending (newest first)
+  const availableWeeks = useMemo(() => {
+    if (!plans.data) return [];
+    const weeks = Array.from(new Set(plans.data.map((p) => p.week_start)));
+    return weeks.sort((a, b) => b.localeCompare(a));
+  }, [plans.data]);
 
-  // Tasks statistics
+  // Current active plan for selected week
+  const currentPlan = useMemo(() => {
+    if (!plans.data) return null;
+    return plans.data.find((p) => p.week_start === selectedWeek) ?? null;
+  }, [plans.data, selectedWeek]);
+
+  // Tasks statistics for selected week
   const allTasks = currentPlan?.tasks ?? [];
   const completedTasks = allTasks.filter((t) => t.is_done);
   const totalTasksCount = allTasks.length;
@@ -84,68 +116,104 @@ function DashboardPage() {
   const chartData = useMemo(() => {
     if (!plans.data || plans.data.length === 0) return [];
     const sorted = [...plans.data].sort(
-      (a, b) => new Date(a.week_start).getTime() - new Date(b.week_start).getTime()
+      (a, b) =>
+        new Date(`${a.week_start}T12:00:00`).getTime() -
+        new Date(`${b.week_start}T12:00:00`).getTime()
     );
     const recent = sorted.slice(-8);
     return recent.map((p) => {
       const total = p.tasks.length;
       const completed = p.tasks.filter((t) => t.is_done).length;
       return {
-        week: new Date(p.week_start).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-        }),
+        week: formatWeekDisplay(p.week_start),
         weekStart: p.week_start,
         completed,
         remaining: Math.max(0, total - completed),
         total,
         rate: total > 0 ? Math.round((completed / total) * 100) : 0,
+        isSelected: p.week_start === selectedWeek,
       };
     });
-  }, [plans.data]);
+  }, [plans.data, selectedWeek]);
 
-  // Plan status color and display helper
-  const getStatusBadge = (status?: string) => {
+  // Plan status color and display helper with real backend lifecycles
+  const getStatusBadge = (
+    status?: string,
+    isLoading?: boolean,
+    isError?: boolean,
+    hasPlan?: boolean
+  ) => {
+    if (isLoading) {
+      return {
+        label: "Loading…",
+        className: "bg-muted text-muted-foreground border-border",
+        icon: Clock,
+      };
+    }
+    if (isError) {
+      return {
+        label: "Error",
+        className: "bg-destructive/10 text-destructive border-destructive/20",
+        icon: CircleAlert,
+      };
+    }
+    if (!hasPlan) {
+      return {
+        label: "Not Started",
+        className: "bg-muted text-muted-foreground border-border",
+        icon: CircleAlert,
+      };
+    }
     switch (status) {
       case "approved":
         return {
           label: "Approved",
-          className: "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+          className:
+            "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
           icon: CheckCircle2,
         };
       case "submitted":
         return {
-          label: "Awaiting review",
-          className: "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+          label: "Submitted / Awaiting approval",
+          className:
+            "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
           icon: Clock,
         };
       case "draft":
         return {
           label: "Draft",
-          className: "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+          className:
+            "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
           icon: Clock,
         };
+      case "done":
       case "finished":
         return {
-          label: "Finished",
-          className: "bg-muted text-muted-foreground border-border",
+          label: "Done",
+          className:
+            "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
           icon: CheckCircle2,
         };
       default:
         return {
-          label: "Not started",
+          label: status ? status.replace("_", " ") : "Not Started",
           className: "bg-muted text-muted-foreground border-border",
           icon: CircleAlert,
         };
     }
   };
 
-  const statusInfo = getStatusBadge(currentPlan?.status);
+  const statusInfo = getStatusBadge(
+    currentPlan?.status,
+    plans.isLoading,
+    plans.isError,
+    !!currentPlan
+  );
   const StatusIcon = statusInfo.icon;
 
   return (
     <div className="space-y-8">
-      {/* Top Welcome / Overview Bar */}
+      {/* Top Welcome / Overview Bar with Functional Week Selector */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -163,12 +231,60 @@ function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Compact Week Selector */}
+          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 shadow-xs">
+            <CalendarDays className="size-4 text-primary shrink-0" />
+            <span className="text-xs font-medium text-muted-foreground">Week:</span>
+            {availableWeeks.length > 0 && (
+              <select
+                aria-label="Select planning week"
+                className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
+                value={selectedWeek}
+                onChange={(e) => setSelectedWeek(e.target.value)}
+              >
+                {!availableWeeks.includes(currentMonday) && (
+                  <option value={currentMonday}>Current Week ({formatWeekDisplay(currentMonday)})</option>
+                )}
+                {availableWeeks.map((w) => (
+                  <option key={w} value={w}>
+                    {w === currentMonday
+                      ? `Current Week (${formatWeekDisplay(w)})`
+                      : `Week of ${formatWeekDisplay(w)}`}
+                  </option>
+                ))}
+              </select>
+            )}
+            <Input
+              type="date"
+              aria-label="Choose Monday date"
+              value={selectedWeek}
+              onChange={(e) => {
+                if (e.target.value) {
+                  setSelectedWeek(getMonday(e.target.value));
+                }
+              }}
+              className="h-7 w-32 text-xs border-0 bg-muted/50 shadow-none px-1.5 focus-visible:ring-1"
+              title="Pick any week"
+            />
+          </div>
+
+          {selectedWeek !== currentMonday && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-9 px-2.5 text-xs cursor-pointer"
+              onClick={() => setSelectedWeek(currentMonday)}
+            >
+              Current week
+            </Button>
+          )}
+
           <Link
             to="/plans"
             className={cn(
               buttonVariants({ size: "default" }),
-              "h-10 rounded-lg px-4 text-xs font-medium shadow-xs cursor-pointer gap-2"
+              "h-9 rounded-lg px-4 text-xs font-medium shadow-xs cursor-pointer gap-2"
             )}
           >
             <ListTodo className="size-4" />
@@ -232,12 +348,13 @@ function DashboardPage() {
                 </div>
               </CardHeader>
               <CardContent className="pt-2 text-xs text-muted-foreground">
-                {currentPlan?.week_start
-                  ? `Week of ${new Date(currentPlan.week_start).toLocaleDateString(undefined, {
-                      month: "short",
-                      day: "numeric",
-                    })}`
-                  : "No plan scheduled yet"}
+                {plans.isLoading
+                  ? "Loading week details…"
+                  : plans.isError
+                    ? "Could not load plan data"
+                    : currentPlan
+                      ? `Week of ${formatWeekDisplay(currentPlan.week_start)}`
+                      : `Week of ${formatWeekDisplay(selectedWeek)} · No plan`}
               </CardContent>
             </Card>
 
@@ -249,10 +366,10 @@ function DashboardPage() {
                 </CardDescription>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="text-2xl font-bold tracking-tight text-foreground">
-                    {completedTasks.length}
+                    {plans.isLoading ? "…" : plans.isError ? "—" : completedTasks.length}
                   </span>
                   <span className="text-xs text-muted-foreground font-medium">
-                    / {totalTasksCount} tasks
+                    / {plans.isLoading ? "…" : plans.isError ? "—" : totalTasksCount} tasks
                   </span>
                 </div>
               </CardHeader>
@@ -261,11 +378,13 @@ function DashboardPage() {
                   <div className="h-1.5 flex-1 rounded-full bg-muted overflow-hidden">
                     <div
                       className="h-full rounded-full bg-primary transition-all duration-300"
-                      style={{ width: `${completionRate}%` }}
+                      style={{
+                        width: `${plans.isLoading || plans.isError ? 0 : completionRate}%`,
+                      }}
                     />
                   </div>
                   <span className="text-[11px] font-semibold text-muted-foreground">
-                    {completionRate}%
+                    {plans.isLoading || plans.isError ? "—" : `${completionRate}%`}
                   </span>
                 </div>
               </CardContent>
@@ -279,20 +398,36 @@ function DashboardPage() {
                 </CardDescription>
                 <div className="mt-1 flex items-baseline gap-2">
                   <span className="text-2xl font-bold tracking-tight text-foreground">
-                    {currentPlan?.main_shipped === true
-                      ? "Shipped"
-                      : currentPlan?.main_shipped === false
-                        ? "Not shipped"
-                        : "In progress"}
+                    {plans.isLoading
+                      ? "…"
+                      : plans.isError
+                        ? "—"
+                        : currentPlan?.main_shipped === true
+                          ? "Shipped"
+                          : currentPlan?.main_shipped === false
+                            ? "Not shipped"
+                            : currentPlan?.status === "done"
+                              ? "Done"
+                              : currentPlan
+                                ? "In progress"
+                                : "—"}
                   </span>
                 </div>
               </CardHeader>
               <CardContent className="pt-2 text-xs text-muted-foreground">
-                {currentPlan?.main_shipped === true
-                  ? "Outcome recorded as shipped"
-                  : currentPlan?.main_shipped === false
-                    ? "Incomplete outcome logged"
-                    : "Final outcome pending Friday finish"}
+                {plans.isLoading
+                  ? "Loading outcome status…"
+                  : plans.isError
+                    ? "Could not load outcome"
+                    : currentPlan?.main_shipped === true
+                      ? "Outcome recorded as shipped"
+                      : currentPlan?.main_shipped === false
+                        ? "Incomplete outcome logged"
+                        : currentPlan?.status === "done"
+                          ? "Plan marked done"
+                          : currentPlan
+                            ? "Final outcome pending Friday finish"
+                            : "No plan scheduled for this week"}
               </CardContent>
             </Card>
 
@@ -329,23 +464,45 @@ function DashboardPage() {
                       Weekly Delivery Progress
                     </CardTitle>
                     <CardDescription className="text-xs">
-                      Completed vs remaining tasks over recent planning weeks
+                      Completed vs remaining tasks across recent planning weeks
                     </CardDescription>
                   </div>
-                  <span className="text-xs font-medium text-muted-foreground bg-muted/60 px-2 py-0.5 rounded">
-                    Velocity
+                  <span className="text-xs font-medium text-primary bg-primary/10 px-2 py-0.5 rounded">
+                    Week of {formatWeekDisplay(selectedWeek)}
                   </span>
                 </div>
               </CardHeader>
               <CardContent>
                 {chartData.length > 0 ? (
                   <div className="space-y-4">
-                    <div className="h-60 w-full pt-2">
+                    <div className="flex items-center gap-4 text-xs pt-1">
+                      <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                        <span className="size-2.5 rounded-sm bg-[#2563EB]" />
+                        Completed
+                      </span>
+                      <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                        <span className="size-2.5 rounded-sm bg-[#93C5FD]" />
+                        Remaining
+                      </span>
+                      <span className="text-[11px] text-muted-foreground italic ml-auto">
+                        Click a bar to inspect that week
+                      </span>
+                    </div>
+
+                    <div className="h-60 w-full pt-1">
                       <ResponsiveContainer width="100%" height="100%">
                         <BarChart
                           data={chartData}
                           margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
                           barGap={4}
+                          className="cursor-pointer"
+                          onClick={(state) => {
+                            const clickedWeek =
+                              state?.activePayload?.[0]?.payload?.weekStart;
+                            if (clickedWeek) {
+                              setSelectedWeek(clickedWeek);
+                            }
+                          }}
                         >
                           <CartesianGrid
                             strokeDasharray="3 3"
@@ -371,18 +528,39 @@ function DashboardPage() {
                               const d = payload[0].payload;
                               return (
                                 <div className="rounded-xl border border-border bg-popover p-3 shadow-md text-xs text-popover-foreground space-y-1">
-                                  <p className="font-semibold text-foreground">Week of {d.weekStart}</p>
-                                  <div className="flex items-center justify-between gap-4">
-                                    <span className="text-muted-foreground">Completed:</span>
-                                    <span className="font-bold text-[#2563eb]">{d.completed}</span>
+                                  <div className="flex items-center justify-between gap-2 border-b border-border pb-1">
+                                    <p className="font-semibold text-foreground">
+                                      Week of {formatWeekDisplay(d.weekStart)}
+                                    </p>
+                                    {d.weekStart === selectedWeek && (
+                                      <span className="text-[10px] font-semibold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
+                                        Selected
+                                      </span>
+                                    )}
                                   </div>
                                   <div className="flex items-center justify-between gap-4">
-                                    <span className="text-muted-foreground">Remaining:</span>
-                                    <span className="font-bold text-muted-foreground">{d.remaining}</span>
+                                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                                      <span className="size-2 rounded-full bg-[#2563EB]" />
+                                      Completed:
+                                    </span>
+                                    <span className="font-bold text-[#2563EB]">
+                                      {d.completed}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center justify-between gap-4">
+                                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                                      <span className="size-2 rounded-full bg-[#93C5FD]" />
+                                      Remaining:
+                                    </span>
+                                    <span className="font-bold text-foreground">
+                                      {d.remaining}
+                                    </span>
                                   </div>
                                   <div className="flex items-center justify-between gap-4 border-t border-border pt-1">
                                     <span className="text-muted-foreground">Total:</span>
-                                    <span className="font-bold text-foreground">{d.total}</span>
+                                    <span className="font-bold text-foreground">
+                                      {d.total}
+                                    </span>
                                   </div>
                                 </div>
                               );
@@ -391,30 +569,57 @@ function DashboardPage() {
                           <Bar
                             dataKey="completed"
                             name="Completed Tasks"
-                            fill="#2563eb"
                             radius={[4, 4, 0, 0]}
                             maxBarSize={32}
-                          />
+                          >
+                            {chartData.map((entry) => (
+                              <Cell
+                                key={`completed-${entry.weekStart}`}
+                                fill={
+                                  entry.weekStart === selectedWeek
+                                    ? "#1D4ED8"
+                                    : "#2563EB"
+                                }
+                              />
+                            ))}
+                          </Bar>
                           <Bar
                             dataKey="remaining"
                             name="Remaining Tasks"
-                            fill="#94a3b8"
                             radius={[4, 4, 0, 0]}
                             maxBarSize={32}
-                          />
+                          >
+                            {chartData.map((entry) => (
+                              <Cell
+                                key={`remaining-${entry.weekStart}`}
+                                fill={
+                                  entry.weekStart === selectedWeek
+                                    ? "#60A5FA"
+                                    : "#93C5FD"
+                                }
+                              />
+                            ))}
+                          </Bar>
                         </BarChart>
                       </ResponsiveContainer>
                     </div>
                     <div className="flex items-center justify-between border-t border-border/50 pt-3 text-xs text-muted-foreground">
-                      <span>Delivery rate across {chartData.length} recorded plan{chartData.length === 1 ? "" : "s"}.</span>
+                      <span>
+                        Delivery rate across {chartData.length} recorded plan
+                        {chartData.length === 1 ? "" : "s"}.
+                      </span>
                       <span className="font-medium text-foreground">
-                        {chartData.reduce((acc, c) => acc + c.completed, 0)} completed / {chartData.reduce((acc, c) => acc + c.total, 0)} total tasks
+                        {chartData.reduce((acc, c) => acc + c.completed, 0)} completed /{" "}
+                        {chartData.reduce((acc, c) => acc + c.total, 0)} total tasks
                       </span>
                     </div>
                   </div>
                 ) : (
                   <div className="py-12 text-center text-xs text-muted-foreground">
-                    <p>No historical delivery data recorded yet. Create and complete weekly plans to visualize delivery velocity.</p>
+                    <p>
+                      No historical delivery data recorded yet. Create and complete
+                      weekly plans to visualize delivery velocity.
+                    </p>
                   </div>
                 )}
               </CardContent>
@@ -430,7 +635,7 @@ function DashboardPage() {
                         Weekly Focus &amp; Deliverables
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        Plan for week of {currentPlan.week_start}
+                        Plan for week of {formatWeekDisplay(currentPlan.week_start)} ({currentPlan.week_start})
                       </CardDescription>
                     </div>
                     <Link
@@ -525,16 +730,18 @@ function DashboardPage() {
                 </CardContent>
               </Card>
             ) : (
-              /* Welcoming Empty State */
+              /* Accurate Empty State for Selected Week */
               <Card className="rounded-xl border border-dashed border-border bg-card/60 p-8 text-center shadow-xs flex flex-col items-center justify-center">
                 <div className="mx-auto flex size-12 items-center justify-center rounded-2xl bg-primary/10 text-primary mb-4">
                   <Sparkles className="size-6" />
                 </div>
                 <h3 className="text-base font-semibold text-foreground">
-                  No active plan for this week
+                  No plan for week of {formatWeekDisplay(selectedWeek)}
                 </h3>
                 <p className="mx-auto mt-2 max-w-md text-xs text-muted-foreground leading-relaxed">
-                  WeekCurve keeps your team aligned around one shippable weekly outcome with Pydantic AI reviews, task breakdown, and Friday lookbacks.
+                  No active plan found for week starting {selectedWeek}. WeekCurve keeps
+                  your team aligned around one shippable weekly outcome with Pydantic AI
+                  reviews, task breakdown, and Friday lookbacks.
                 </p>
                 <div className="mt-6">
                   <Link

@@ -232,7 +232,23 @@ function DashboardPage() {
           <CardContent>
             {chartData.length > 0 ? (
               <div className="space-y-4">
-                <div className="h-64 w-full pt-2">
+                {/* Series Legend */}
+                <div className="flex items-center gap-4 text-xs pt-1">
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <span className="size-2.5 rounded-sm bg-[#2563EB]" />
+                    Successes
+                  </span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <span className="size-2.5 rounded-sm bg-[#60A5FA]" />
+                    Failures
+                  </span>
+                  <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
+                    <span className="size-2.5 rounded-sm bg-[#93C5FD]" />
+                    Rate Limited
+                  </span>
+                </div>
+
+                <div className="h-64 w-full pt-1">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                       data={chartData}
@@ -265,16 +281,25 @@ function DashboardPage() {
                             <div className="rounded-xl border border-border bg-popover p-3 shadow-md text-xs text-popover-foreground space-y-1">
                               <p className="font-semibold text-foreground">{d.fullName}</p>
                               <div className="flex items-center justify-between gap-4">
-                                <span className="text-muted-foreground">Successes:</span>
-                                <span className="font-bold text-[#2563eb]">{d.successes}</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span className="size-2 rounded-full bg-[#2563EB]" />
+                                  Successes:
+                                </span>
+                                <span className="font-bold text-[#2563EB]">{d.successes}</span>
                               </div>
                               <div className="flex items-center justify-between gap-4">
-                                <span className="text-muted-foreground">Failures:</span>
-                                <span className="font-bold text-[#ef4444]">{d.failures}</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span className="size-2 rounded-full bg-[#60A5FA]" />
+                                  Failures:
+                                </span>
+                                <span className="font-bold text-foreground">{d.failures}</span>
                               </div>
                               <div className="flex items-center justify-between gap-4">
-                                <span className="text-muted-foreground">Rate limited:</span>
-                                <span className="font-bold text-[#f59e0b]">{d.rateLimited}</span>
+                                <span className="flex items-center gap-1.5 text-muted-foreground">
+                                  <span className="size-2 rounded-full bg-[#93C5FD]" />
+                                  Rate limited:
+                                </span>
+                                <span className="font-bold text-foreground">{d.rateLimited}</span>
                               </div>
                               <div className="flex items-center justify-between gap-4 border-t border-border pt-1">
                                 <span className="text-muted-foreground">Total Invocations:</span>
@@ -284,9 +309,9 @@ function DashboardPage() {
                           );
                         }}
                       />
-                      <Bar dataKey="successes" name="Successes" fill="#2563eb" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                      <Bar dataKey="failures" name="Failures" fill="#ef4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                      <Bar dataKey="rateLimited" name="Rate limited" fill="#f59e0b" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      <Bar dataKey="successes" name="Successes" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      <Bar dataKey="failures" name="Failures" fill="#60A5FA" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      <Bar dataKey="rateLimited" name="Rate limited" fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>
