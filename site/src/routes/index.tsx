@@ -183,22 +183,27 @@ function HomePage() {
           </div>
 
           <div className="mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
-            {/* Eyebrow Pill */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-border/80 bg-card/70 px-3.5 py-1 text-xs font-medium text-muted-foreground shadow-2xs backdrop-blur-xs">
-              <Sparkles className="size-3.5 text-blue-600 dark:text-blue-400" />
-              <span>AI-assisted weekly planning for software teams</span>
+            {/* Pill Badge */}
+            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3.5 py-1 text-xs font-semibold text-foreground shadow-2xs backdrop-blur-xs">
+              <Sparkles className="size-3.5 text-primary" />
+              <span>AI-Assisted Weekly Planning for Software Teams</span>
             </div>
 
             {/* Main Headline */}
-            <h1 className="mt-5 text-4xl font-bold tracking-tight text-foreground sm:text-6xl lg:text-7xl leading-[1.1] sm:leading-[1.08]">
-              Plan the week.
-              <br />
-              <span className="text-blue-600 dark:text-blue-400">Ship the goal.</span>
+            <h1 className="mt-6 text-4xl font-extrabold tracking-tight text-foreground sm:text-6xl lg:text-7xl">
+              Plan the week.{" "}
+              <span className="block text-muted-foreground font-semibold sm:inline">
+                Ship the goal.
+              </span>
             </h1>
 
-            {/* Shortened Supporting Copy */}
-            <p className="mx-auto mt-4 max-w-xl text-base font-normal leading-relaxed text-muted-foreground sm:text-lg">
-              Set clear weekly goals, get lead approval, and track what ships.
+            {/* Supporting Copy */}
+            <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
+              Weekly planning for software teams that want clear goals, useful approvals, and a Friday finish.
+            </p>
+
+            <p className="mx-auto mt-2 max-w-xl text-xs sm:text-sm text-muted-foreground/80">
+              One shippable outcome per engineer on Monday. Instant AI plan feedback. Clear team lead approval. Friday ends on a high note without carrying unfinished work into next week.
             </p>
 
             {/* Call To Actions */}
@@ -746,7 +751,7 @@ function HomePage() {
         <section className="border-t border-border/80 py-20 sm:py-28">
           <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
             <div className="relative overflow-hidden rounded-3xl border border-border bg-card px-6 py-12 text-center shadow-xl sm:px-12 sm:py-16">
-              <h2 className="text-3xl font-bold tracking-tight text-foreground sm:text-5xl">
+              <h2 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-5xl">
                 Make Friday easier to answer for.
               </h2>
               <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
