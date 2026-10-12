@@ -4,6 +4,7 @@ import pytest
 from pydantic_ai.models.test import TestModel
 from sqlalchemy import select
 
+from app.config import settings
 from app.exceptions import APIException
 from app.models import AIUsage, Organization, OrganizationMembership, User
 from app.services.ai import AIService, ReviewTask
@@ -45,8 +46,9 @@ async def test_review_uses_typed_output_and_records_usage(ai_context):
 
 
 @pytest.mark.asyncio
-async def test_missing_key_records_unavailable_without_gemini(ai_context):
+async def test_missing_key_records_unavailable_without_gemini(ai_context, monkeypatch):
     db, org_id, member_id = ai_context
+    monkeypatch.setattr(settings, "GOOGLE_API_KEY", None)
     with pytest.raises(APIException) as error:
         await AIService(db, org_id, member_id).review([
             ReviewTask(id="main-1", kind="main", text="Ship checkout")])

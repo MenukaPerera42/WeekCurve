@@ -98,7 +98,7 @@ function SignupPage() {
             )}
           </div>
         )}
-        {(!token || invite.data) && !currentUser && (
+        {(!token || invite.data) && (!token || !currentUser) && (
           <form
             className="space-y-4 rounded-xl border bg-white p-6 shadow-sm"
             onSubmit={(event) => {

@@ -292,11 +292,25 @@ function PlansPage() {
                           size="sm"
                           variant="outline"
                           className="mt-2 cursor-pointer"
-                          onClick={() =>
-                            updateTask(task.id, {
-                              text: finding.suggested_rewrite,
-                            })
-                          }
+                          onClick={() => {
+                            setTasks((current) =>
+                              current.map((item) =>
+                                item.id === task.id
+                                  ? { ...item, text: finding.suggested_rewrite }
+                                  : item
+                              )
+                            );
+                            setReview((current) =>
+                              current
+                                ? {
+                                    ...current,
+                                    findings: current.findings.filter(
+                                      (item) => item !== finding
+                                    ),
+                                  }
+                                : null
+                            );
+                          }}
                         >
                           Apply suggestion
                         </Button>
