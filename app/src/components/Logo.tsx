@@ -8,12 +8,12 @@ export function Logo({ className }: { className?: string }) {
   return (
     <span role="img" aria-label="WeekCurve" className="inline-flex max-w-full items-center">
       <img
-        src="/branding/weekcurve-logo-dark.png"
+        src="/weekcurve-logo-dark.svg"
         alt=""
         className={`${className ?? "h-8"} w-auto max-w-full dark:hidden`}
       />
       <img
-        src="/branding/weekcurve-logo-light.png"
+        src="/weekcurve-logo-light.svg"
         alt=""
         className={`${className ?? "h-8"} hidden w-auto max-w-full dark:block`}
       />
