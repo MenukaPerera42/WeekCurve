@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { CalendarDays } from "lucide-react";
 import { teamDigest } from "@/api/endpoints/ai/ai";
 import type { TeamDigest } from "@/api/model";
 import {
@@ -13,6 +14,7 @@ import {
 } from "@/api/endpoints/teams/teams";
 import { listMembers } from "@/api/endpoints/organizations/organizations";
 import {
+  myPlans,
   teamWeek,
   getPlan,
   approvePlan,
@@ -32,6 +34,20 @@ function monday() {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function formatWeekDisplay(dateStr: string): string {
+  if (!dateStr) return "";
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (year === undefined || month === undefined || day === undefined) return "";
+  const d = new Date(year, month - 1, day, 12, 0, 0);
+  return d.toLocaleDateString(undefined, {
+    month: "short",
+    day: "numeric",
+  });
+}
+
 function TeamsPage() {
   const { organization } = useOrganization();
   const user = useCurrentUser();
@@ -40,6 +56,7 @@ function TeamsPage() {
     organization?.role === "owner" || organization?.role === "admin";
   const queryClient = useQueryClient();
   const [teamId, setTeamId] = useState("");
+  const currentMonday = useMemo(() => monday(), []);
   const [week, setWeek] = useState(monday);
   const [newName, setNewName] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
@@ -55,6 +72,26 @@ function TeamsPage() {
   } | null>(null);
   const digestVersion = useRef(0);
   const currentDigestScope = useRef("");
+
+  const userPlans = useQuery({
+    queryKey: ["my-plans", orgId],
+    queryFn: () => myPlans(orgId),
+    enabled: !!orgId,
+  });
+
+  const availableWeeks = useMemo(() => {
+    const set = new Set<string>();
+    set.add(currentMonday);
+    if (userPlans.data) {
+      for (const p of userPlans.data) {
+        if (p.week_start) {
+          set.add(p.week_start);
+        }
+      }
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [userPlans.data, currentMonday]);
+
   const teams = useQuery({
     queryKey: ["teams", orgId],
     queryFn: () => listTeams(orgId),
@@ -168,12 +205,15 @@ function TeamsPage() {
     queryClient.invalidateQueries({ queryKey: ["team-members", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-week", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-plan", orgId] });
+    queryClient.invalidateQueries({ queryKey: ["my-plans", orgId] });
   };
   const create = useMutation({
     mutationFn: () => createTeam(orgId, { name: newName.trim() }),
     onSuccess: (team) => {
       setNewName("");
       setTeamId(team.id);
+      setSelectedPlanId("");
+      setFeedback("");
       refresh();
     },
   });
@@ -280,6 +320,7 @@ function TeamsPage() {
                 onChange={(e) => {
                   setTeamId(e.target.value);
                   setSelectedPlanId("");
+                  setFeedback("");
                 }}
               >
                 <option value="">Select a team</option>
@@ -377,14 +418,28 @@ function TeamsPage() {
                     Plans and progress at a glance.
                   </p>
                 </div>
-                <label className="text-sm">
-                  Week starting{" "}
-                  <Input
-                    type="date"
+                <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-xs">
+                  <CalendarDays className="size-4 text-primary shrink-0" />
+                  <span className="text-xs font-medium text-muted-foreground">Week:</span>
+                  <select
+                    aria-label="Select team planning week"
+                    className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer pr-1"
                     value={week}
-                    onChange={(e) => setWeek(e.target.value)}
-                  />
-                </label>
+                    onChange={(e) => {
+                      setWeek(e.target.value);
+                      setSelectedPlanId("");
+                      setFeedback("");
+                    }}
+                  >
+                    {availableWeeks.map((w) => (
+                      <option key={w} value={w} className="bg-popover text-popover-foreground">
+                        {w === currentMonday
+                          ? `Current Week (${formatWeekDisplay(w)})`
+                          : `Week of ${formatWeekDisplay(w)}`}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
               {weekView.isLoading && <p className="mt-4">Loading the week…</p>}
               {weekView.error instanceof ApiError &&

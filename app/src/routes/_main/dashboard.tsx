@@ -30,7 +30,6 @@ import { useCurrentUser } from "@/contexts/user-context";
 import { useOrganization } from "@/contexts/organization-context";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button, buttonVariants } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_main/dashboard")({
@@ -44,20 +43,13 @@ function thisMonday(): string {
   return `${day.getFullYear()}-${part(day.getMonth() + 1)}-${part(day.getDate())}`;
 }
 
-function getMonday(dateStr: string): string {
-  if (!dateStr) return thisMonday();
-  const [year, month, day] = dateStr.split("-").map(Number);
-  const d = new Date(year, month - 1, day, 12, 0, 0);
-  const dayOfWeek = d.getDay();
-  const diff = (dayOfWeek + 6) % 7;
-  d.setDate(d.getDate() - diff);
-  const part = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${part(d.getMonth() + 1)}-${part(day.getDate())}`;
-}
-
 function formatWeekDisplay(dateStr: string): string {
   if (!dateStr) return "";
-  const [year, month, day] = dateStr.split("-").map(Number);
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (year === undefined || month === undefined || day === undefined) return "";
   const d = new Date(year, month - 1, day, 12, 0, 0);
   return d.toLocaleDateString(undefined, {
     month: "short",
@@ -86,12 +78,19 @@ function DashboardPage() {
     enabled: !!orgId,
   });
 
-  // All distinct recorded plan weeks sorted descending (newest first)
-  const availableWeeks = useMemo(() => {
-    if (!plans.data) return [];
-    const weeks = Array.from(new Set(plans.data.map((p) => p.week_start)));
-    return weeks.sort((a, b) => b.localeCompare(a));
-  }, [plans.data]);
+  // Distinct recorded plan weeks + current week sorted newest first
+  const dropdownWeeks = useMemo(() => {
+    const set = new Set<string>();
+    set.add(currentMonday);
+    if (plans.data) {
+      for (const p of plans.data) {
+        if (p.week_start) {
+          set.add(p.week_start);
+        }
+      }
+    }
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [plans.data, currentMonday]);
 
   // Current active plan for selected week
   const currentPlan = useMemo(() => {
@@ -136,7 +135,7 @@ function DashboardPage() {
     });
   }, [plans.data, selectedWeek]);
 
-  // Plan status color and display helper with real backend lifecycles
+  // Plan status styling aligned with WeekCurve brand palette (navy/platinum/blue)
   const getStatusBadge = (
     status?: string,
     isLoading?: boolean,
@@ -146,58 +145,62 @@ function DashboardPage() {
     if (isLoading) {
       return {
         label: "Loading…",
-        className: "bg-muted text-muted-foreground border-border",
+        className:
+          "bg-slate-100/80 text-slate-600 border-slate-200 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700",
         icon: Clock,
       };
     }
     if (isError) {
       return {
         label: "Error",
-        className: "bg-destructive/10 text-destructive border-destructive/20",
+        className:
+          "bg-red-500/10 text-red-600 border-red-500/20 dark:bg-red-500/15 dark:text-red-400 dark:border-red-500/30",
         icon: CircleAlert,
       };
     }
     if (!hasPlan) {
       return {
         label: "Not Started",
-        className: "bg-muted text-muted-foreground border-border",
+        className:
+          "bg-slate-100 text-slate-500 border-slate-200/80 dark:bg-slate-800/60 dark:text-slate-400 dark:border-slate-700/80",
         icon: CircleAlert,
       };
     }
     switch (status) {
+      case "done":
+      case "finished":
+        return {
+          label: "Done",
+          className:
+            "bg-slate-900 text-slate-100 border-slate-800 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-200 shadow-2xs font-semibold",
+          icon: CheckCircle2,
+        };
       case "approved":
         return {
           label: "Approved",
           className:
-            "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20",
+            "bg-blue-600/10 text-blue-700 border-blue-600/25 dark:bg-blue-400/15 dark:text-blue-300 dark:border-blue-400/30 font-semibold",
           icon: CheckCircle2,
         };
       case "submitted":
         return {
           label: "Submitted / Awaiting approval",
           className:
-            "bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/20",
+            "bg-blue-900/10 text-blue-800 border-blue-900/20 dark:bg-blue-950/40 dark:text-blue-200 dark:border-blue-800/40",
           icon: Clock,
         };
       case "draft":
         return {
           label: "Draft",
           className:
-            "bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20",
+            "bg-slate-200/60 text-slate-700 border-slate-300/80 dark:bg-slate-800/80 dark:text-slate-300 dark:border-slate-700",
           icon: Clock,
-        };
-      case "done":
-      case "finished":
-        return {
-          label: "Done",
-          className:
-            "bg-purple-500/10 text-purple-600 dark:text-purple-400 border-purple-500/20",
-          icon: CheckCircle2,
         };
       default:
         return {
           label: status ? status.replace("_", " ") : "Not Started",
-          className: "bg-muted text-muted-foreground border-border",
+          className:
+            "bg-slate-100 text-slate-600 border-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700",
           icon: CircleAlert,
         };
     }
@@ -213,7 +216,7 @@ function DashboardPage() {
 
   return (
     <div className="space-y-8">
-      {/* Top Welcome / Overview Bar with Functional Week Selector */}
+      {/* Top Welcome / Overview Bar with Available Weeks Dropdown */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
@@ -232,41 +235,24 @@ function DashboardPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Compact Week Selector */}
-          <div className="flex items-center gap-1.5 rounded-lg border border-border bg-card px-2.5 py-1.5 shadow-xs">
+          {/* Available Weeks Dropdown */}
+          <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-xs">
             <CalendarDays className="size-4 text-primary shrink-0" />
             <span className="text-xs font-medium text-muted-foreground">Week:</span>
-            {availableWeeks.length > 0 && (
-              <select
-                aria-label="Select planning week"
-                className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer"
-                value={selectedWeek}
-                onChange={(e) => setSelectedWeek(e.target.value)}
-              >
-                {!availableWeeks.includes(currentMonday) && (
-                  <option value={currentMonday}>Current Week ({formatWeekDisplay(currentMonday)})</option>
-                )}
-                {availableWeeks.map((w) => (
-                  <option key={w} value={w}>
-                    {w === currentMonday
-                      ? `Current Week (${formatWeekDisplay(w)})`
-                      : `Week of ${formatWeekDisplay(w)}`}
-                  </option>
-                ))}
-              </select>
-            )}
-            <Input
-              type="date"
-              aria-label="Choose Monday date"
+            <select
+              aria-label="Select planning week"
+              className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer pr-1"
               value={selectedWeek}
-              onChange={(e) => {
-                if (e.target.value) {
-                  setSelectedWeek(getMonday(e.target.value));
-                }
-              }}
-              className="h-7 w-32 text-xs border-0 bg-muted/50 shadow-none px-1.5 focus-visible:ring-1"
-              title="Pick any week"
-            />
+              onChange={(e) => setSelectedWeek(e.target.value)}
+            >
+              {dropdownWeeks.map((w) => (
+                <option key={w} value={w} className="bg-popover text-popover-foreground">
+                  {w === currentMonday
+                    ? `Current Week (${formatWeekDisplay(w)})`
+                    : `Week of ${formatWeekDisplay(w)}`}
+                </option>
+              ))}
+            </select>
           </div>
 
           {selectedWeek !== currentMonday && (
@@ -282,6 +268,7 @@ function DashboardPage() {
 
           <Link
             to="/plans"
+            search={{ week: selectedWeek }}
             className={cn(
               buttonVariants({ size: "default" }),
               "h-9 rounded-lg px-4 text-xs font-medium shadow-xs cursor-pointer gap-2"
@@ -497,8 +484,8 @@ function DashboardPage() {
                           barGap={4}
                           className="cursor-pointer"
                           onClick={(state) => {
-                            const clickedWeek =
-                              state?.activePayload?.[0]?.payload?.weekStart;
+                            const payload = (state as unknown as { activePayload?: Array<{ payload?: { weekStart?: string } }> })?.activePayload;
+                            const clickedWeek = payload?.[0]?.payload?.weekStart;
                             if (clickedWeek) {
                               setSelectedWeek(clickedWeek);
                             }
@@ -525,7 +512,8 @@ function DashboardPage() {
                             cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
                             content={({ active, payload }) => {
                               if (!active || !payload?.length) return null;
-                              const d = payload[0].payload;
+                              const d = payload[0]?.payload;
+                              if (!d) return null;
                               return (
                                 <div className="rounded-xl border border-border bg-popover p-3 shadow-md text-xs text-popover-foreground space-y-1">
                                   <div className="flex items-center justify-between gap-2 border-b border-border pb-1">
@@ -640,6 +628,7 @@ function DashboardPage() {
                     </div>
                     <Link
                       to="/plans"
+                      search={{ week: selectedWeek }}
                       className="text-xs font-medium text-primary hover:underline inline-flex items-center gap-1"
                     >
                       Edit plan
@@ -661,7 +650,7 @@ function DashboardPage() {
                               Main Shippable Goal
                             </span>
                             {mainGoalTask.is_done && (
-                              <span className="inline-flex items-center gap-1 rounded bg-emerald-500/10 px-1.5 py-0.5 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+                              <span className="inline-flex items-center gap-1 rounded bg-slate-900 text-slate-100 dark:bg-slate-100 dark:text-slate-900 px-1.5 py-0.5 text-[10px] font-semibold">
                                 <Check className="size-3" />
                                 Shipped
                               </span>
@@ -746,6 +735,7 @@ function DashboardPage() {
                 <div className="mt-6">
                   <Link
                     to="/plans"
+                    search={{ week: selectedWeek }}
                     className={cn(
                       buttonVariants({ size: "default" }),
                       "h-10 rounded-lg px-4 text-xs font-medium cursor-pointer"

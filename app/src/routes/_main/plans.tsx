@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   endOfWeekSummary,
   generatePlan,
@@ -26,7 +26,32 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-export const Route = createFileRoute("/_main/plans")({ component: PlansPage });
+function isValidMonday(dateStr?: string | null): boolean {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+  const parts = dateStr.split("-").map(Number);
+  const year = parts[0];
+  const month = parts[1];
+  const day = parts[2];
+  if (year === undefined || month === undefined || day === undefined) return false;
+  const d = new Date(year, month - 1, day, 12, 0, 0);
+  if (isNaN(d.getTime())) return false;
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return false;
+  return d.getDay() === 1;
+}
+
+type PlansSearch = {
+  week?: string;
+};
+
+export const Route = createFileRoute("/_main/plans")({
+  validateSearch: (search: Record<string, unknown>): PlansSearch => {
+    const raw = typeof search["week"] === "string" ? (search["week"] as string) : undefined;
+    return {
+      week: isValidMonday(raw) ? raw : undefined,
+    };
+  },
+  component: PlansPage,
+});
 
 type DraftTask = {
   id: string;
@@ -58,7 +83,41 @@ function PlansPage() {
   const { organization } = useOrganization();
   const orgId = organization?.id ?? "";
   const queryClient = useQueryClient();
-  const [week, setWeek] = useState(thisMonday);
+  const search = Route.useSearch();
+  const navigate = Route.useNavigate();
+
+  const searchWeek = search.week;
+  const initialWeek = useMemo(() => {
+    if (isValidMonday(searchWeek)) return searchWeek!;
+    if (typeof window !== "undefined") {
+      const param = new URLSearchParams(window.location.search).get("week");
+      if (isValidMonday(param)) return param!;
+    }
+    return thisMonday();
+  }, []);
+
+  const [week, setWeek] = useState<string>(initialWeek);
+
+  const handleWeekChange = (newWeek: string) => {
+    clearLookback();
+    clearSummary();
+    setWeek(newWeek);
+    if (isValidMonday(newWeek)) {
+      navigate({
+        search: (prev) => ({ ...prev, week: newWeek }),
+        replace: true,
+      });
+    }
+  };
+
+  useEffect(() => {
+    if (searchWeek && isValidMonday(searchWeek) && searchWeek !== week) {
+      clearLookback();
+      clearSummary();
+      setWeek(searchWeek);
+    }
+  }, [searchWeek]);
+
   const [tasks, setTasks] = useState<DraftTask[]>(emptyTasks);
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [notes, setNotes] = useState("");
@@ -336,11 +395,7 @@ function PlansPage() {
             className="mt-1"
             type="date"
             value={week}
-            onChange={(e) => {
-              clearLookback();
-              clearSummary();
-              setWeek(e.target.value);
-            }}
+            onChange={(e) => handleWeekChange(e.target.value)}
           />
         </label>
       </div>
@@ -846,10 +901,7 @@ function PlansPage() {
                   key={p.id}
                   variant={week === p.week_start ? "default" : "outline"}
                   className="cursor-pointer"
-                  onClick={() => {
-                    clearSummary();
-                    setWeek(p.week_start);
-                  }}
+                  onClick={() => handleWeekChange(p.week_start)}
                 >
                   {p.week_start} · {p.status}
                 </Button>
