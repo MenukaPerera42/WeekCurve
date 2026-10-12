@@ -16,6 +16,7 @@ export function Logo({ className }: { className?: string }) {
         src="/branding/weekcurve-logo-light.png"
         alt=""
         className={`${className ?? "h-8"} hidden w-auto max-w-full dark:block`}
+      />
     </span>
   );
 }
