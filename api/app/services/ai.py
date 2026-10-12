@@ -348,7 +348,7 @@ class AIService:
         self.last_usage: AIUsage | None = None
 
     async def _run(self, feature: str, output_type, instructions: str, prompt: str,
-                   *, deps=None, tool=None):
+                   *, deps=None, tool=None, output_validator=None):
         start = time.monotonic()
         outcome = "success"
         provider_status = None
@@ -362,12 +362,14 @@ class AIService:
             agent = Agent(model, output_type=output_type,
                           instructions=instructions,
                           model_settings={"temperature": 0.0} if feature in ("review", "look_back", "weekly_summary", "team_digest") else None,
-                          **({"retries": {"output": 1}} if feature in ("look_back", "weekly_summary", "team_digest") else {}),
+                          **({"retries": {"output": 1}} if feature in ("review", "look_back", "weekly_summary", "team_digest") else {}),
                           **({"deps_type": LookbackDeps} if deps is not None else {}))
             if tool is not None:
                 agent.tool(tool)
             if feature == "look_back":
                 agent.output_validator(validate_lookback_output)
+            if output_validator is not None:
+                agent.output_validator(output_validator)
             run = agent.run(prompt, deps=deps) if deps is not None else agent.run(prompt)
             result = await asyncio.wait_for(run, timeout=settings.AI_TIMEOUT_SECONDS)
             return result.output
@@ -377,11 +379,12 @@ class AIService:
             outcome = "timeout"
             raise APIException(503, "AI_TIMEOUT", "AI took too long. You can keep planning manually.")
         except Exception as exc:
-            if (feature in ("look_back", "weekly_summary", "team_digest")
+            if (feature in ("review", "look_back", "weekly_summary", "team_digest")
                     and isinstance(exc, UnexpectedModelBehavior)
                     and exc.message.startswith("Exceeded maximum output retries (1)")):
                 outcome = "invalid_output"
                 message = ("AI returned unusable advice. Try again later." if feature == "look_back"
+                           else "AI returned an incomplete review. Try again later." if feature == "review"
                            else "AI returned an unusable summary. Try again later.")
                 raise APIException(503, "AI_INVALID_OUTPUT", message) from None
             provider_status = getattr(exc, "status_code", None)
@@ -414,8 +417,40 @@ class AIService:
         prompt = "Weekly tasks:\n" + "\n".join(
             f"ID {t.id}; kind {t.kind}; task {t.text}; why {t.why_it_matters or '(missing)'}"
             for t in tasks)
+        def validate_review_output(_ctx: RunContext, output: InternalPlanReview) -> InternalPlanReview:
+            if any(f.task_id not in ids for f in output.findings):
+                logger.warning("ai_review_invalid_output reason=unknown_task task_count=%d assessment_count=%d finding_count=%d",
+                               len(tasks), len(output.task_assessments), len(output.findings))
+                raise ModelRetry("Use only supplied task IDs in findings.")
+            if self.model is None or output.task_assessments or output.plan_checks:
+                assessed = [item.task_id for item in output.task_assessments]
+                if len(assessed) != len(tasks) or set(assessed) != ids:
+                    logger.warning("ai_review_invalid_output reason=task_coverage task_count=%d assessment_count=%d finding_count=%d",
+                                   len(tasks), len(assessed), len(output.findings))
+                    raise ModelRetry("Assess every supplied task ID exactly once and include plan_checks.")
+                if output.plan_checks is None:
+                    logger.warning("ai_review_invalid_output reason=missing_plan_checks task_count=%d assessment_count=%d finding_count=%d",
+                                   len(tasks), len(assessed), len(output.findings))
+                    raise ModelRetry("Include plan_checks for the full weekly plan.")
+                flagged = {
+                    item.task_id for item in output.task_assessments
+                    if not (item.measurable_outcome and item.verifiable_deliverable
+                            and item.fits_one_week and item.independent_deliverable)
+                    or item.activity_only
+                }
+                checks = output.plan_checks
+                if (not checks.main_goal_explains_value or not checks.go_to_market_covered
+                        or not checks.weekly_scope_realistic):
+                    flagged.add(next(task.id for task in tasks if task.kind == "main"))
+                if not flagged.issubset({finding.task_id for finding in output.findings}):
+                    logger.warning("ai_review_invalid_output reason=missing_findings task_count=%d assessment_count=%d finding_count=%d",
+                                   len(tasks), len(assessed), len(output.findings))
+                    raise ModelRetry("Add concrete findings for every task with a failed quality check.")
+            return output
+
         result: InternalPlanReview = await self._run(
-            "review", InternalPlanReview, REVIEW_INSTRUCTIONS, prompt)
+            "review", InternalPlanReview, REVIEW_INSTRUCTIONS, prompt,
+            output_validator=validate_review_output)
         if any(f.task_id not in ids for f in result.findings):
             await self._invalid_output()
             raise APIException(503, "AI_INVALID_OUTPUT", "AI returned an unusable review. Try again later.")

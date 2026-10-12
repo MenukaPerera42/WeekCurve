@@ -79,6 +79,20 @@ function errorMessage(error: unknown) {
   return "Network error. Try again.";
 }
 
+function reviewErrorMessage(error: unknown) {
+  if (!(error instanceof ApiError)) return "Network error. Try the review again.";
+  if (error.status === 401 || error.status === 403) return "Your access has changed. Sign in again or select an organization you can access.";
+  if (error.status === 429) return "AI is busy. Try the review again later.";
+  const data = error.data as { detail?: { type?: string; msg?: string }[] } | undefined;
+  const detail = data?.detail?.[0];
+  if (detail?.type === "ai_timeout") return "AI took too long. Try the review again later.";
+  if (detail?.type === "ai_invalid_output") {
+    return detail.msg ?? "AI returned an unusable review. Try again later.";
+  }
+  if (error.status === 422) return "The plan could not be reviewed. Check the task details and try again.";
+  return "AI review is unavailable right now. Try again later.";
+}
+
 function PlansPage() {
   const { organization } = useOrganization();
   const orgId = organization?.id ?? "";
@@ -129,6 +143,7 @@ function PlansPage() {
   const draftVersion = useRef(0);
   const currentDraftScope = useRef("");
   const [review, setReview] = useState<PlanReview | null>(null);
+  const [reviewError, setReviewError] = useState("");
   const [lookbackAdvice, setLookbackAdvice] =
     useState<LookbackAdvice | null>(null);
   const [lookbackError, setLookbackError] = useState("");
@@ -188,6 +203,7 @@ function PlansPage() {
         : emptyTasks()
     );
     setReview(null);
+    setReviewError("");
     setLookbackAdvice(null);
     setLookbackError("");
     summaryVersion.current += 1;
@@ -242,19 +258,41 @@ function PlansPage() {
     onSuccess: refresh,
   });
   const aiReview = useMutation({
-    mutationFn: () =>
-      reviewPlan(orgId, {
-        tasks: tasks
-          .filter((t) => t.text.trim())
-          .map((t) => ({
-            id: t.id,
-            kind: t.kind,
-            text: t.text,
-            why_it_matters: t.why_it_matters || null,
-          })),
-      }),
-    onSuccess: setReview,
+    mutationFn: ({ organizationId, currentTasks }: {
+      organizationId: string;
+      currentTasks: DraftTask[];
+      scope: string;
+      version: number;
+    }) => reviewPlan(organizationId, {
+      tasks: currentTasks.filter((task) => task.text.trim()).map((task) => ({
+        id: task.id,
+        kind: task.kind,
+        text: task.text,
+        why_it_matters: task.why_it_matters || null,
+      })),
+    }),
+    onSuccess: (result, request) => {
+      if (currentDraftScope.current === request.scope &&
+          draftVersion.current === request.version) {
+        setReview(result);
+        setReviewError("");
+      }
+    },
+    onError: (error, request) => {
+      if (currentDraftScope.current === request.scope &&
+          draftVersion.current === request.version) {
+        setReviewError(reviewErrorMessage(error));
+      }
+    },
   });
+
+  function requestReview() {
+    if (!orgId || !editable || busy) return;
+    setReviewError("");
+    setReview(null);
+    aiReview.mutate({ organizationId: orgId, currentTasks: tasks,
+      scope: selectedKey, version: draftVersion.current });
+  }
   const aiDraft = useMutation({
     mutationFn: ({ organizationId, requestNotes }: {
       organizationId: string;
@@ -278,6 +316,7 @@ function PlansPage() {
         }))
       );
       setReview(null);
+      setReviewError("");
       setDraftError(null);
       setMessage("Draft added to the form. Edit it before saving.");
     },
@@ -399,6 +438,7 @@ function PlansPage() {
       current.map((task) => (task.id === id ? { ...task, ...changes } : task))
     );
     setReview(null);
+    setReviewError("");
   }
   function addTask(kind: DraftTask["kind"]) {
     draftVersion.current += 1;
@@ -408,6 +448,8 @@ function PlansPage() {
       ...current,
       { id: crypto.randomUUID(), kind, text: "", why_it_matters: "" },
     ]);
+    setReview(null);
+    setReviewError("");
   }
   const visibleSummary = weeklySummary?.scope === summaryScope ? weeklySummary : null;
   const savedPlanSelected = !!plan && selected?.id === plan.id && plan.week_start === week;
@@ -422,9 +464,17 @@ function PlansPage() {
     save.error ||
     submit.error ||
     toggle.error ||
-    finish.error ||
-    aiReview.error;
+    finish.error;
   const editable = !plan || plan.status === "draft";
+  const savingBlocked = save.isPending || submit.isPending || toggle.isPending ||
+    finish.isPending || aiDraft.isPending;
+  const saveDisabledReason = !isValidMonday(week)
+    ? "Choose a Monday in Week starting Monday to save this draft."
+    : aiDraft.isPending
+      ? "Wait for the AI draft to finish before saving."
+      : savingBlocked
+        ? "Wait for the current plan update to finish before saving."
+        : "";
 
   return (
     <div className="space-y-6">
@@ -580,6 +630,8 @@ function PlansPage() {
                           clearLookback();
                           clearSummary();
                           setTasks((all) => all.filter((t) => t.id !== task.id));
+                          setReview(null);
+                          setReviewError("");
                         }}
                       >
                         Remove
@@ -680,6 +732,7 @@ function PlansPage() {
                                   }
                                 : null
                             );
+                            setReviewError("");
                           }}
                         >
                           Apply suggestion
@@ -722,6 +775,9 @@ function PlansPage() {
                 </strong>
               </p>
             )}
+            {reviewError && (
+              <p className="mt-4 text-sm text-destructive" role="alert">{reviewError}</p>
+            )}
             {actionError && (
               <p className="mt-4 text-sm text-destructive">
                 {errorMessage(actionError)}
@@ -734,12 +790,9 @@ function PlansPage() {
               {editable && (
                 <>
                   <Button
+                    type="button"
                     className="cursor-pointer"
-                    disabled={
-                      busy ||
-                      week === "" ||
-                      new Date(`${week}T12:00:00`).getDay() !== 1
-                    }
+                    disabled={!!saveDisabledReason}
                     onClick={() => save.mutate()}
                   >
                     {save.isPending ? "Saving…" : "Save draft"}
@@ -748,11 +801,16 @@ function PlansPage() {
                     variant="outline"
                     className="cursor-pointer"
                     disabled={busy}
-                    onClick={() => aiReview.mutate()}
+                    onClick={requestReview}
                   >
                     {aiReview.isPending ? "Reviewing…" : "Review with AI"}
                   </Button>
                 </>
+              )}
+              {editable && saveDisabledReason && (
+                <p className="w-full text-sm text-muted-foreground" role="status">
+                  {saveDisabledReason}
+                </p>
               )}
               {plan?.status === "draft" && (
                 <Button
