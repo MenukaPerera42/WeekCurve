@@ -121,6 +121,13 @@ function PlansPage() {
   const [tasks, setTasks] = useState<DraftTask[]>(emptyTasks);
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [notes, setNotes] = useState("");
+  const [draftError, setDraftError] = useState<{
+    scope: string;
+    version: number;
+    message: string;
+  } | null>(null);
+  const draftVersion = useRef(0);
+  const currentDraftScope = useRef("");
   const [review, setReview] = useState<PlanReview | null>(null);
   const [lookbackAdvice, setLookbackAdvice] =
     useState<LookbackAdvice | null>(null);
@@ -162,6 +169,10 @@ function PlansPage() {
   }
 
   const selectedKey = `${orgId}:${week}:${selected?.id ?? "new"}:${selected?.status ?? ""}`;
+  if (currentDraftScope.current !== selectedKey) {
+    currentDraftScope.current = selectedKey;
+    draftVersion.current += 1;
+  }
   if (loadedKey !== selectedKey) {
     lookbackVersion.current += 1;
     setLoadedKey(selectedKey);
@@ -245,8 +256,17 @@ function PlansPage() {
     onSuccess: setReview,
   });
   const aiDraft = useMutation({
-    mutationFn: () => generatePlan(orgId, { notes }),
-    onSuccess: (result) => {
+    mutationFn: ({ organizationId, requestNotes }: {
+      organizationId: string;
+      requestNotes: string;
+      scope: string;
+      version: number;
+    }) => generatePlan(organizationId, { notes: requestNotes }),
+    onSuccess: (result, request) => {
+      if (currentDraftScope.current !== request.scope ||
+          draftVersion.current !== request.version) {
+        return;
+      }
       clearLookback();
       clearSummary();
       setTasks(
@@ -258,9 +278,36 @@ function PlansPage() {
         }))
       );
       setReview(null);
+      setDraftError(null);
       setMessage("Draft added to the form. Edit it before saving.");
     },
+    onError: (error, request) => {
+      if (currentDraftScope.current === request.scope &&
+          draftVersion.current === request.version) {
+        setDraftError({ scope: request.scope, version: request.version,
+          message: errorMessage(error) });
+      }
+    },
   });
+
+  function requestDraft() {
+    const requestNotes = notes.trim();
+    if (!orgId || !editable || !plans.isSuccess || busy ||
+        requestNotes.length < 15 || requestNotes.length > 5000) {
+      return;
+    }
+    if (tasks.some((task) => task.text.trim() || task.why_it_matters.trim()) &&
+        !window.confirm("Replace your current unsaved plan edits with an AI draft?")) {
+      return;
+    }
+    setDraftError(null);
+    aiDraft.mutate({
+      organizationId: orgId,
+      requestNotes,
+      scope: selectedKey,
+      version: draftVersion.current,
+    });
+  }
   const aiLookback = useMutation({
     mutationFn: ({ organizationId, weekStart }: {
       organizationId: string;
@@ -345,6 +392,7 @@ function PlansPage() {
   }
 
   function updateTask(id: string, changes: Partial<DraftTask>) {
+    draftVersion.current += 1;
     clearLookback();
     clearSummary();
     setTasks((current) =>
@@ -353,6 +401,7 @@ function PlansPage() {
     setReview(null);
   }
   function addTask(kind: DraftTask["kind"]) {
+    draftVersion.current += 1;
     clearLookback();
     clearSummary();
     setTasks((current) => [
@@ -374,8 +423,7 @@ function PlansPage() {
     submit.error ||
     toggle.error ||
     finish.error ||
-    aiReview.error ||
-    aiDraft.error;
+    aiReview.error;
   const editable = !plan || plan.status === "draft";
 
   return (
@@ -528,6 +576,7 @@ function PlansPage() {
                         type="button"
                         className="cursor-pointer text-sm text-destructive"
                         onClick={() => {
+                          draftVersion.current += 1;
                           clearLookback();
                           clearSummary();
                           setTasks((all) => all.filter((t) => t.id !== task.id));
@@ -611,6 +660,7 @@ function PlansPage() {
                           variant="outline"
                           className="mt-2 cursor-pointer"
                           onClick={() => {
+                            draftVersion.current += 1;
                             clearLookback();
                             clearSummary();
                             setTasks((current) =>
@@ -863,19 +913,42 @@ function PlansPage() {
                 save it.
               </p>
               <Textarea
+                aria-label="Brain dump notes"
+                maxLength={5000}
                 value={notes}
-                onChange={(e) => setNotes(e.target.value)}
+                onChange={(e) => {
+                  draftVersion.current += 1;
+                  setDraftError(null);
+                  setNotes(e.target.value);
+                }}
                 placeholder="Need to finish billing, fix the webhook, and announce the update…"
               />
+              <p className="mt-2 text-xs text-muted-foreground">
+                Enter at least 15 characters after trimming ({notes.trim().length}/5000).
+                {" "}Existing unsaved plan edits require confirmation before replacement.
+              </p>
               <Button
+                type="button"
                 className="mt-3 cursor-pointer"
                 variant="outline"
-                disabled={busy || notes.length < 15}
-                onClick={() => aiDraft.mutate()}
+                disabled={!plans.isSuccess || busy || notes.trim().length < 15 ||
+                  notes.trim().length > 5000}
+                onClick={requestDraft}
               >
                 {aiDraft.isPending ? "Making a draft…" : "Make a draft"}
               </Button>
+              {draftError?.scope === selectedKey &&
+                draftError.version === draftVersion.current && (
+                <p className="mt-3 text-sm text-destructive" role="alert">
+                  {draftError.message} You can retry or keep editing manually.
+                </p>
+              )}
             </section>
+          )}
+          {!editable && (
+            <p className="text-sm text-muted-foreground">
+              Brain dump drafts are available before submission or while this plan is a draft.
+            </p>
           )}
           {plan?.events.length ? (
             <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
