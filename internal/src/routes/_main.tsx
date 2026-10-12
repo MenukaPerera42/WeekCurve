@@ -16,7 +16,8 @@ function MainLayout() {
         <Sidebar />
         <MobileNav />
         <main className="flex-1 overflow-y-auto">
-          <div className="mx-auto max-w-6xl space-y-6 p-4 pb-24 sm:p-6 lg:p-8">
+          <div className="relative mx-auto max-w-6xl space-y-8 p-4 pb-28 sm:p-6 sm:pb-28 lg:p-8 lg:pb-16">
+            {/* Top controls: on mobile, shows logo + theme toggle; on desktop, keeps theme toggle cleanly aligned at top right */}
             <div className="flex items-center justify-between md:justify-end">
               <div className="flex items-center gap-2 md:hidden">
                 <Link to="/dashboard" aria-label="WeekCurve internal">
