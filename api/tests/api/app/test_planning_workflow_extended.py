@@ -153,6 +153,65 @@ async def test_monday_validation_main_structure_and_one_member_week(
 
 
 @pytest.mark.asyncio
+async def test_missing_go_to_market_blocks_submission_but_allows_draft_and_revision(
+    async_client, session_factory, workflow
+):
+    org_id = workflow["org"]
+    as_user(async_client, workflow["author"])
+    incomplete = {"tasks": tasks()["tasks"][:2]}
+    draft = await save(async_client, org_id, payload=incomplete)
+    assert draft["status"] == "draft"
+    assert len(draft["tasks"]) == 2
+
+    rejected = await async_client.post(
+        f"/app/organizations/{org_id}/plans/{draft['id']}/submit",
+        headers=ORIGIN,
+    )
+    assert rejected.status_code == 400
+    assert "go-to-market" in rejected.text.lower()
+    async with session_factory() as db:
+        plan = await db.get(WeeklyPlan, UUID(draft["id"]))
+        assert plan is not None and plan.status == "draft"
+        assert plan.submitted_at is None
+        submitted_events = await db.scalar(select(func.count()).select_from(PlanEvent).where(
+            PlanEvent.plan_id == UUID(draft["id"]), PlanEvent.action == "submitted",
+        ))
+        assert submitted_events == 0
+
+    revised = await save(async_client, org_id)
+    assert revised["id"] == draft["id"]
+    assert any(task["kind"] == "go_to_market" for task in revised["tasks"])
+    submitted = await submit(async_client, org_id, draft["id"])
+    assert submitted["status"] == "submitted"
+    async with session_factory() as db:
+        plan = await db.get(WeeklyPlan, UUID(draft["id"]))
+        assert plan is not None and plan.status == "submitted"
+        assert plan.submitted_at is not None
+
+
+@pytest.mark.asyncio
+async def test_blank_go_to_market_does_not_satisfy_submission_rule(
+    async_client, session_factory, workflow
+):
+    org_id = workflow["org"]
+    as_user(async_client, workflow["author"])
+    payload = tasks()
+    payload["tasks"][2]["text"] = "   "
+    draft = await save(async_client, org_id, payload=payload)
+
+    rejected = await async_client.post(
+        f"/app/organizations/{org_id}/plans/{draft['id']}/submit",
+        headers=ORIGIN,
+    )
+    assert rejected.status_code == 400
+    assert "go-to-market" in rejected.text.lower()
+    async with session_factory() as db:
+        plan = await db.get(WeeklyPlan, UUID(draft["id"]))
+        assert plan is not None and plan.status == "draft"
+        assert plan.submitted_at is None
+
+
+@pytest.mark.asyncio
 async def test_submission_approval_and_invalid_transitions(
     async_client, session_factory, workflow
 ):

@@ -91,6 +91,8 @@ class PlanService:
         tasks = await self.tasks(plan.id)
         if sum(t.kind == "main" for t in tasks) != 1 or not any(t.kind == "sub_goal" for t in tasks):
             raise ValidationException("Add a main task and at least one sub-goal")
+        if not any(t.kind == "go_to_market" and t.text.strip() for t in tasks):
+            raise ValidationException("Add at least one go-to-market task")
         main = next(t for t in tasks if t.kind == "main")
         if not main.why_it_matters:
             raise ValidationException("Explain why the main task matters")
