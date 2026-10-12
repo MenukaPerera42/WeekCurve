@@ -183,9 +183,9 @@ function HomePage() {
           </div>
 
           <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
-            {/* Expressive Supporting Hero Label */}
-            <div className="inline-flex items-center gap-2 text-sm font-medium italic tracking-wide text-muted-foreground sm:text-base">
-              <Sparkles className="size-3.5 sm:size-4 text-primary shrink-0 not-italic" />
+            {/* Supporting Hero Label */}
+            <div className="inline-flex items-center gap-2 text-xs font-medium tracking-wide text-muted-foreground sm:text-sm">
+              <Sparkles className="size-3.5 text-primary shrink-0" />
               <span>AI-Assisted Weekly Planning for Software Teams</span>
             </div>
 
