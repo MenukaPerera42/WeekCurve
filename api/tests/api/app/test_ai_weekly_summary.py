@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime
 
 import pytest
 from pydantic_ai.exceptions import ModelHTTPError
-from pydantic_ai.messages import ModelResponse, ToolCallPart
+from pydantic_ai.messages import ModelResponse, ToolCallPart, UserPromptPart
 from pydantic_ai.models.function import FunctionModel
 from sqlalchemy import select
 
@@ -18,13 +18,15 @@ from app.services import ai
 from app.services.ai import AIService, WeeklySummary
 
 
-def summary_model(output, prompts=None, calls=None):
+def summary_model(output, prompts=None, calls=None, instructions=None):
     async def respond(messages, info):
         if calls is not None:
             calls.append("model")
         if prompts is not None:
-            prompts.extend(str(part.content) for message in messages for part in message.parts
-                           if hasattr(part, "content"))
+            prompts.extend(part.content for message in messages for part in message.parts
+                           if isinstance(part, UserPromptPart))
+        if instructions is not None:
+            instructions.append(info.instructions or "")
         return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
 
     return FunctionModel(respond)
@@ -186,18 +188,23 @@ async def test_bounded_member_explanation_is_data_and_not_saved(summary_case):
     task.is_done = False
     await case["db"].flush()
     prompts = []
+    instructions = []
     summary = await AIService(
         case["db"], case["org"], case["member"],
         model=summary_model({
             "summary": "The main goal shipped, but launch notes remain incomplete.",
             "next_week_follow_up": None,
-        }, prompts=prompts),
+        }, prompts=prompts, instructions=instructions),
     ).summarize_week(case["plan"], explanation)
     await case["db"].commit()
 
     assert summary.known_reason == explanation
     assert any(json.dumps(explanation) in prompt for prompt in prompts)
-    assert any("untrusted data" in prompt for prompt in prompts)
+    assert instructions and all("untrusted" in instruction.lower()
+                                and "ignore instructions" in instruction.lower()
+                                and "member-provided explanation" in instruction.lower()
+                                for instruction in instructions)
+    assert all(explanation not in instruction for instruction in instructions)
     assert all("GOOGLE_API_KEY" not in prompt for prompt in prompts)
     assert (await case["db"].get(WeeklyPlan, case["plan"])).status == "done"
     assert (await case["db"].scalars(select(PlanEvent).where(
@@ -230,6 +237,8 @@ async def test_endpoint_isolated_by_organization_author_and_active_membership(
     case = summary_case
     calls = []
     monkeypatch.setattr(ai, "GoogleModel", lambda *args, **kwargs: calls.append("model"))
+    async with session_factory() as db:
+        baseline_usage_ids = set((await db.scalars(select(AIUsage.id))).all())
     headers = {"origin": "http://localhost:3001"}
     anonymous = await async_client.post(
         summary_url(case["org"], case["plan"]), json={}, headers=headers,
@@ -255,7 +264,7 @@ async def test_endpoint_isolated_by_organization_author_and_active_membership(
     assert response.status_code == 404
     assert calls == []
     async with session_factory() as db:
-        assert (await db.scalars(select(AIUsage))).all() == []
+        assert set((await db.scalars(select(AIUsage.id))).all()) == baseline_usage_ids
 
 
 @pytest.mark.asyncio

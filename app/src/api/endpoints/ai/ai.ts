@@ -20,6 +20,8 @@ import type {
   LookbackAdvice,
   PlanReview,
   ReviewRequest,
+  WeeklySummary,
+  WeeklySummaryRequest,
 } from "../../model";
 
 import { customInstance } from "../../../lib/api-client";
@@ -301,4 +303,120 @@ export const useLookBackBeforePlanning = <
     getLookBackBeforePlanningMutationOptions(options),
     queryClient
   );
+};
+export const getEndOfWeekSummaryUrl = (
+  organizationId: string,
+  planId: string
+) => {
+  return `/organizations/${organizationId}/ai/plans/${planId}/end-of-week-summary`;
+};
+
+/**
+ * @summary End Of Week Summary
+ */
+export const endOfWeekSummary = async (
+  organizationId: string,
+  planId: string,
+  weeklySummaryRequest: WeeklySummaryRequest,
+  options?: Parameters<typeof customInstance>[1]
+): Promise<WeeklySummary> => {
+  return customInstance<WeeklySummary>(
+    getEndOfWeekSummaryUrl(organizationId, planId),
+    {
+      ...options,
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      body: JSON.stringify(weeklySummaryRequest),
+    }
+  );
+};
+
+export const getEndOfWeekSummaryMutationOptions = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof endOfWeekSummary>>,
+    TError,
+    {
+      organizationId: string;
+      planId: string;
+      data: BodyType<WeeklySummaryRequest>;
+    },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof endOfWeekSummary>>,
+  TError,
+  {
+    organizationId: string;
+    planId: string;
+    data: BodyType<WeeklySummaryRequest>;
+  },
+  TContext
+> => {
+  const mutationKey = ["endOfWeekSummary"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof endOfWeekSummary>>,
+    {
+      organizationId: string;
+      planId: string;
+      data: BodyType<WeeklySummaryRequest>;
+    }
+  > = (props) => {
+    const { organizationId, planId, data } = props ?? {};
+
+    return endOfWeekSummary(organizationId, planId, data, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type EndOfWeekSummaryMutationResult = NonNullable<
+  Awaited<ReturnType<typeof endOfWeekSummary>>
+>;
+export type EndOfWeekSummaryMutationBody = BodyType<WeeklySummaryRequest>;
+export type EndOfWeekSummaryMutationError = ErrorType<HTTPValidationError>;
+
+/**
+ * @summary End Of Week Summary
+ */
+export const useEndOfWeekSummary = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof endOfWeekSummary>>,
+      TError,
+      {
+        organizationId: string;
+        planId: string;
+        data: BodyType<WeeklySummaryRequest>;
+      },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient
+): UseMutationResult<
+  Awaited<ReturnType<typeof endOfWeekSummary>>,
+  TError,
+  {
+    organizationId: string;
+    planId: string;
+    data: BodyType<WeeklySummaryRequest>;
+  },
+  TContext
+> => {
+  return useMutation(getEndOfWeekSummaryMutationOptions(options), queryClient);
 };

@@ -117,3 +117,45 @@ export const LookBackBeforePlanningResponse = zod.object({
   planning_adjustments: zod.array(zod.string()),
   message: zod.string().min(lookBackBeforePlanningResponseMessageMin),
 });
+
+/**
+ * @summary End Of Week Summary
+ */
+export const EndOfWeekSummaryParams = zod.object({
+  organization_id: zod.string().uuid(),
+  plan_id: zod.string().uuid(),
+});
+
+export const endOfWeekSummaryBodyUnfinishedExplanationOneMax = 1000;
+
+export const EndOfWeekSummaryBody = zod.object({
+  unfinished_explanation: zod
+    .union([
+      zod.string().min(1).max(endOfWeekSummaryBodyUnfinishedExplanationOneMax),
+      zod.null(),
+    ])
+    .optional(),
+});
+
+export const EndOfWeekSummaryResponse = zod.object({
+  week_start: zod.string().date(),
+  main_goal_shipped: zod.union([zod.boolean(), zod.null()]),
+  shipped_main_goal: zod.union([zod.string(), zod.null()]),
+  completed_tasks: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      kind: zod.enum(["main", "sub_goal", "go_to_market"]),
+      text: zod.string(),
+    })
+  ),
+  incomplete_tasks: zod.array(
+    zod.object({
+      id: zod.string().uuid(),
+      kind: zod.enum(["main", "sub_goal", "go_to_market"]),
+      text: zod.string(),
+    })
+  ),
+  known_reason: zod.union([zod.string(), zod.null()]),
+  summary: zod.string(),
+  next_week_follow_up: zod.union([zod.string(), zod.null()]),
+});

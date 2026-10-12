@@ -49,3 +49,7 @@ export * from "./teamResponse";
 export * from "./userResponse";
 export * from "./validationError";
 export * from "./validationErrorCtx";
+export * from "./weeklySummary";
+export * from "./weeklySummaryRequest";
+export * from "./weeklySummaryTask";
+export * from "./weeklySummaryTaskKind";
