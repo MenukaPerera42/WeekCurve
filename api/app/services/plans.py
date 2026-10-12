@@ -1,5 +1,5 @@
 import uuid
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,8 +30,7 @@ class PlanService:
             .order_by(PlanTask.position))).all())
 
     async def save_draft(self, author_id: uuid.UUID, week_start: date, items: list[dict]) -> WeeklyPlan:
-        if week_start.weekday() != 0:
-            raise ValidationException("Week must start on Monday", "week_start")
+        week_start -= timedelta(days=week_start.weekday())
         if sum(item["kind"] == "main" for item in items) != 1:
             raise ValidationException("A plan needs exactly one main task", "tasks")
         primary = await self.session.scalar(select(TeamMembership).where(
@@ -55,8 +54,12 @@ class PlanService:
             for team_id in teams:
                 self.session.add(PlanTeam(organization_id=self.organization_id,
                     plan_id=plan.id, team_id=team_id))
+        elif plan.status == "submitted":
+            plan.status = "draft"
+            plan.submitted_at = None
+            await self.event(plan.id, author_id, "submission_reopened")
         elif plan.status != "draft":
-            raise ConflictException("Only draft plans can be edited")
+            raise ConflictException("Approved and completed plans cannot be edited")
         await self.session.execute(delete(PlanTask).where(PlanTask.plan_id == plan.id,
             PlanTask.organization_id == self.organization_id))
         await self.session.flush()
@@ -109,6 +112,11 @@ class PlanService:
     async def decide(self, plan: WeeklyPlan, actor_id: uuid.UUID, approve: bool,
                      comment: str | None) -> None:
         await self.require_lead(plan, actor_id)
+        plan = await self.session.scalar(select(WeeklyPlan).where(
+            WeeklyPlan.id == plan.id, WeeklyPlan.organization_id == self.organization_id)
+            .with_for_update().execution_options(populate_existing=True))
+        if plan is None:
+            raise ResourceNotFoundException("Plan not found")
         if plan.status != "submitted":
             raise ConflictException("Only submitted plans can be reviewed")
         if not approve and not comment:

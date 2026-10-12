@@ -115,11 +115,15 @@ function TeamsPage() {
     queryFn: () => teamWeek(orgId, activeTeamId, week),
     enabled: !!activeTeamId,
     retry: false,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
   const detail = useQuery({
     queryKey: ["team-plan", orgId, selectedPlanId],
     queryFn: () => getPlan(orgId, selectedPlanId),
     enabled: !!selectedPlanId,
+    refetchOnMount: "always",
+    refetchOnWindowFocus: "always",
   });
   const digestScope = JSON.stringify([
     orgId,

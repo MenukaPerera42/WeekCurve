@@ -190,8 +190,8 @@ PUT /organizations/{{(verb-var organization-id)}}/teams/{{(verb-var team-id)}}/p
 ** List my plans
 GET /organizations/{{(verb-var organization-id)}}/plans
 
-** Save a Monday draft
-PUT /organizations/{{(verb-var organization-id)}}/plans/weeks/2026-10-12
+** Save a weekly draft (any selected day is keyed by its Monday; saving a submitted plan reopens it for resubmission)
+PUT /organizations/{{(verb-var organization-id)}}/plans/weeks/2026-10-14
 Content-Type: application/json
 {"tasks":[{"kind":"main","text":"Checkout handles expired cards on staging","why_it_matters":"Customers can recover"},{"kind":"sub_goal","text":"Expired card tests pass"},{"kind":"go_to_market","text":"Publish release note"}]}
 

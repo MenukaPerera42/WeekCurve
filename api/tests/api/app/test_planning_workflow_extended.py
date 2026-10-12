@@ -124,7 +124,8 @@ async def test_monday_validation_main_structure_and_one_member_week(
         f"/app/organizations/{org_id}/plans/weeks/2026-10-04",
         headers=ORIGIN, json=tasks(),
     )
-    assert sunday.status_code == 400
+    assert sunday.status_code == 200
+    assert sunday.json()["week_start"] == PAST_MONDAY.isoformat()
     two_main = await async_client.put(
         f"/app/organizations/{org_id}/plans/weeks/{MONDAY}",
         headers=ORIGIN,
@@ -150,6 +151,76 @@ async def test_monday_validation_main_structure_and_one_member_week(
         ))).all()
         assert len(plans) == 1
         assert plans[0].status == "draft"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("chosen_day,expected_monday", [
+    ("2026-10-12", "2026-10-12"),
+    ("2026-10-14", "2026-10-12"),
+    ("2026-10-18", "2026-10-12"),
+    ("2026-11-01", "2026-10-26"),
+    ("2027-01-01", "2026-12-28"),
+])
+async def test_calendar_day_saves_one_monday_plan(
+    async_client, session_factory, workflow, chosen_day, expected_monday
+):
+    as_user(async_client, workflow["author"])
+    path = f"/app/organizations/{workflow['org']}/plans/weeks"
+    created = await async_client.put(f"{path}/{chosen_day}", headers=ORIGIN, json=tasks())
+    assert created.status_code == 200, created.text
+    assert created.json()["week_start"] == expected_monday
+    updated = await async_client.put(
+        f"{path}/{expected_monday}", headers=ORIGIN,
+        json=tasks(main_text="Checkout recovery works on staging"),
+    )
+    assert updated.status_code == 200, updated.text
+    assert updated.json()["id"] == created.json()["id"]
+    listed = await async_client.get(f"/app/organizations/{workflow['org']}/plans")
+    assert listed.status_code == 200
+    assert [plan["id"] for plan in listed.json() if plan["week_start"] == expected_monday] == [created.json()["id"]]
+    async with session_factory() as db:
+        count = await db.scalar(select(func.count()).select_from(WeeklyPlan).where(
+            WeeklyPlan.organization_id == workflow["org"],
+            WeeklyPlan.author_membership_id == workflow["author_member"],
+            WeeklyPlan.week_start == date.fromisoformat(expected_monday),
+        ))
+        assert count == 1
+
+
+@pytest.mark.asyncio
+async def test_submitted_revision_remains_author_and_organization_scoped(
+    async_client, session_factory, workflow
+):
+    as_user(async_client, workflow["author"])
+    submitted_plan = await save(async_client, workflow["org"])
+    await submit(async_client, workflow["org"], submitted_plan["id"])
+    async with session_factory() as db:
+        foreign = Organization(
+            name="Foreign planning", slug=f"foreign-planning-{workflow['org'].hex}"
+        )
+        db.add(foreign)
+        await db.commit()
+        foreign_id = foreign.id
+    denied = await async_client.put(
+        f"/app/organizations/{foreign_id}/plans/weeks/2026-10-07",
+        headers=ORIGIN, json=tasks(main_text="Foreign plan rewrite attempt"),
+    )
+    assert denied.status_code == 404
+    as_user(async_client, workflow["lead"])
+    own_plan = await save(async_client, workflow["org"])
+    assert own_plan["id"] != submitted_plan["id"]
+    as_user(async_client, workflow["author"])
+    unchanged = await async_client.get(
+        f"/app/organizations/{workflow['org']}/plans/{submitted_plan['id']}"
+    )
+    assert unchanged.status_code == 200
+    assert unchanged.json()["status"] == "submitted"
+    assert unchanged.json()["tasks"][0]["text"] == tasks()["tasks"][0]["text"]
+    async with session_factory() as db:
+        foreign_plans = await db.scalar(select(func.count()).select_from(WeeklyPlan).where(
+            WeeklyPlan.organization_id == foreign_id
+        ))
+        assert foreign_plans == 0
 
 
 @pytest.mark.asyncio
@@ -241,8 +312,35 @@ async def test_submission_approval_and_invalid_transitions(
         headers=ORIGIN, json=tasks(main_text="Changed after submission"),
     )
     assert repeat_submit.status_code == 409
-    assert edit_submitted.status_code == 409
+    assert edit_submitted.status_code == 200
+    assert edit_submitted.json()["id"] == plan_id
+    assert edit_submitted.json()["status"] == "draft"
+    assert edit_submitted.json()["tasks"][0]["text"] == "Changed after submission"
+    assert any(event["action"] == "submission_reopened" for event in edit_submitted.json()["events"])
+    async with session_factory() as db:
+        reopened = await db.get(WeeklyPlan, UUID(plan_id))
+        assert reopened is not None and reopened.submitted_at is None
     as_user(async_client, workflow["lead"])
+    reopened_approval = await async_client.post(
+        f"/app/organizations/{org_id}/plans/{plan_id}/approve",
+        headers=ORIGIN, json={},
+    )
+    assert reopened_approval.status_code == 409
+    reopened_week = await async_client.get(
+        f"/app/organizations/{org_id}/teams/{workflow['team']}/weeks/{MONDAY}"
+    )
+    assert reopened_week.status_code == 200
+    assert next(row for row in reopened_week.json() if row["plan_id"] == plan_id)["status"] == "draft"
+    as_user(async_client, workflow["author"])
+    await submit(async_client, org_id, plan_id)
+    as_user(async_client, workflow["lead"])
+    submitted_week = await async_client.get(
+        f"/app/organizations/{org_id}/teams/{workflow['team']}/weeks/{MONDAY}"
+    )
+    assert next(row for row in submitted_week.json() if row["plan_id"] == plan_id)["status"] == "submitted"
+    latest = await async_client.get(f"/app/organizations/{org_id}/plans/{plan_id}")
+    assert latest.status_code == 200
+    assert latest.json()["tasks"][0]["text"] == "Changed after submission"
     approved = await approve(async_client, org_id, plan_id)
     assert approved["status"] == "approved"
     repeat_approval = await async_client.post(
@@ -317,6 +415,11 @@ async def test_individual_completion_is_separate_from_shipped_result(
     as_user(async_client, workflow["lead"])
     await approve(async_client, org_id, plan_id)
     as_user(async_client, workflow["author"])
+    edit_approved = await async_client.put(
+        f"/app/organizations/{org_id}/plans/weeks/{MONDAY}",
+        headers=ORIGIN, json=tasks(main_text="Unauthorized structural revision"),
+    )
+    assert edit_approved.status_code == 409
     completed = await async_client.patch(
         f"/app/organizations/{org_id}/plans/{plan_id}/tasks/{draft['tasks'][0]['id']}",
         headers=ORIGIN, json={"is_done": True},
@@ -333,6 +436,11 @@ async def test_individual_completion_is_separate_from_shipped_result(
     assert finished.json()["status"] == "done"
     assert finished.json()["main_shipped"] is False
     assert finished.json()["tasks"][0]["is_done"] is True
+    edit_done = await async_client.put(
+        f"/app/organizations/{org_id}/plans/weeks/{MONDAY}",
+        headers=ORIGIN, json=tasks(main_text="Unauthorized completed revision"),
+    )
+    assert edit_done.status_code == 409
     after_finish = await async_client.patch(
         f"/app/organizations/{org_id}/plans/{plan_id}/tasks/{draft['tasks'][1]['id']}",
         headers=ORIGIN, json={"is_done": True},

@@ -26,17 +26,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
-function isValidMonday(dateStr?: string | null): boolean {
-  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return false;
+function mondayFor(dateStr?: string | null): string | null {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
   const parts = dateStr.split("-").map(Number);
   const year = parts[0];
   const month = parts[1];
   const day = parts[2];
-  if (year === undefined || month === undefined || day === undefined) return false;
+  if (year === undefined || month === undefined || day === undefined) return null;
   const d = new Date(year, month - 1, day, 12, 0, 0);
-  if (isNaN(d.getTime())) return false;
-  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return false;
-  return d.getDay() === 1;
+  if (isNaN(d.getTime())) return null;
+  if (d.getFullYear() !== year || d.getMonth() !== month - 1 || d.getDate() !== day) return null;
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7));
+  const part = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${part(d.getMonth() + 1)}-${part(d.getDate())}`;
+}
+
+function isValidMonday(dateStr?: string | null): boolean {
+  return !!dateStr && mondayFor(dateStr) === dateStr;
 }
 
 type PlansSearch = {
@@ -47,7 +53,7 @@ export const Route = createFileRoute("/_main/plans")({
   validateSearch: (search: Record<string, unknown>): PlansSearch => {
     const raw = typeof search["week"] === "string" ? (search["week"] as string) : undefined;
     return {
-      week: isValidMonday(raw) ? raw : undefined,
+      week: mondayFor(raw) ?? undefined,
     };
   },
   component: PlansPage,
@@ -105,20 +111,22 @@ function PlansPage() {
     if (isValidMonday(searchWeek)) return searchWeek!;
     if (typeof window !== "undefined") {
       const param = new URLSearchParams(window.location.search).get("week");
-      if (isValidMonday(param)) return param!;
+      if (mondayFor(param)) return mondayFor(param)!;
     }
     return thisMonday();
   }, []);
 
-  const [week, setWeek] = useState<string>(initialWeek);
+  const [selectedDate, setSelectedDate] = useState<string>(initialWeek);
+  const week = mondayFor(selectedDate) ?? "";
 
   const handleWeekChange = (newWeek: string) => {
     clearLookback();
     clearSummary();
-    setWeek(newWeek);
-    if (isValidMonday(newWeek)) {
+    setSelectedDate(newWeek);
+    const monday = mondayFor(newWeek);
+    if (monday) {
       navigate({
-        search: (prev) => ({ ...prev, week: newWeek }),
+        search: (prev) => ({ ...prev, week: monday }),
         replace: true,
       });
     }
@@ -128,7 +136,7 @@ function PlansPage() {
     if (searchWeek && isValidMonday(searchWeek) && searchWeek !== week) {
       clearLookback();
       clearSummary();
-      setWeek(searchWeek);
+      setSelectedDate(searchWeek);
     }
   }, [searchWeek]);
 
@@ -229,6 +237,8 @@ function PlansPage() {
     clearSummary();
     setPlan(updated);
     await queryClient.invalidateQueries({ queryKey: ["my-plans", orgId] });
+    await queryClient.invalidateQueries({ queryKey: ["team-week", orgId] });
+    await queryClient.invalidateQueries({ queryKey: ["team-plan", orgId] });
   };
   const save = useMutation({
     mutationFn: () =>
@@ -465,11 +475,11 @@ function PlansPage() {
     submit.error ||
     toggle.error ||
     finish.error;
-  const editable = !plan || plan.status === "draft";
+  const editable = !plan || plan.status === "draft" || plan.status === "submitted";
   const savingBlocked = save.isPending || submit.isPending || toggle.isPending ||
     finish.isPending || aiDraft.isPending;
-  const saveDisabledReason = !isValidMonday(week)
-    ? "Choose a Monday in Week starting Monday to save this draft."
+  const saveDisabledReason = !week
+    ? "Choose a valid calendar date to save this week's draft."
     : aiDraft.isPending
       ? "Wait for the AI draft to finish before saving."
       : savingBlocked
@@ -488,13 +498,18 @@ function PlansPage() {
           </p>
         </div>
         <label className="text-sm">
-          Week starting Monday{" "}
+          Planning date{" "}
           <Input
             className="mt-1"
             type="date"
-            value={week}
+            value={selectedDate}
             onChange={(e) => handleWeekChange(e.target.value)}
           />
+          {week && (
+            <span className="mt-1 block text-xs text-muted-foreground">
+              Week starts Monday {week}
+            </span>
+          )}
         </label>
       </div>
       {!organization && (
@@ -744,7 +759,13 @@ function PlansPage() {
             </div>
             {plan?.status === "submitted" && (
               <p className="mt-4 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/50">
-                Your plan is currently submitted for review. Tasks can be ticked and marked complete once your team lead approves the plan.
+                You can revise this plan before approval. Saving reopens it as a draft;
+                submit it again when ready for your team lead to review.
+              </p>
+            )}
+            {(plan?.status === "approved" || plan?.status === "done") && (
+              <p className="mt-4 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/50">
+                This plan&apos;s structure is locked after approval. Select another week to create or edit a draft.
               </p>
             )}
             {editable && (
