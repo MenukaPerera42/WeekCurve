@@ -8,7 +8,8 @@ from app.api.app.tenant import CurrentMembership
 from app.database import DBSession
 from app.schemas import Model
 from app.services.ai import (
-    AIService, GeneratedPlan, LookbackAdvice, PlanReview, ReviewTask, WeeklySummary,
+    AIService, GeneratedPlan, LookbackAdvice, PlanReview, ReviewTask, TeamDigest,
+    WeeklySummary,
 )
 
 router = APIRouter()
@@ -64,5 +65,16 @@ async def end_of_week_summary(
         return await AIService(session, organization_id, membership.id).summarize_week(
             plan_id, data.unfinished_explanation,
         )
+    finally:
+        await session.commit()
+
+
+@router.post("/organizations/{organization_id}/ai/teams/{team_id}/weeks/{week_start}/digest", tags=["ai"])
+async def team_digest(
+    organization_id: uuid.UUID, team_id: uuid.UUID, week_start: date,
+    membership: CurrentMembership, session: DBSession,
+) -> TeamDigest:
+    try:
+        return await AIService(session, organization_id, membership.id).team_digest(team_id, week_start)
     finally:
         await session.commit()

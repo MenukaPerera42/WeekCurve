@@ -20,6 +20,7 @@ import type {
   LookbackAdvice,
   PlanReview,
   ReviewRequest,
+  TeamDigest,
   WeeklySummary,
   WeeklySummaryRequest,
 } from "../../model";
@@ -419,4 +420,99 @@ export const useEndOfWeekSummary = <
   TContext
 > => {
   return useMutation(getEndOfWeekSummaryMutationOptions(options), queryClient);
+};
+export const getTeamDigestUrl = (
+  organizationId: string,
+  teamId: string,
+  weekStart: string
+) => {
+  return `/organizations/${organizationId}/ai/teams/${teamId}/weeks/${weekStart}/digest`;
+};
+
+/**
+ * @summary Team Digest
+ */
+export const teamDigest = async (
+  organizationId: string,
+  teamId: string,
+  weekStart: string,
+  options?: Parameters<typeof customInstance>[1]
+): Promise<TeamDigest> => {
+  return customInstance<TeamDigest>(
+    getTeamDigestUrl(organizationId, teamId, weekStart),
+    {
+      ...options,
+      method: "POST",
+    }
+  );
+};
+
+export const getTeamDigestMutationOptions = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof teamDigest>>,
+    TError,
+    { organizationId: string; teamId: string; weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof teamDigest>>,
+  TError,
+  { organizationId: string; teamId: string; weekStart: string },
+  TContext
+> => {
+  const mutationKey = ["teamDigest"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof teamDigest>>,
+    { organizationId: string; teamId: string; weekStart: string }
+  > = (props) => {
+    const { organizationId, teamId, weekStart } = props ?? {};
+
+    return teamDigest(organizationId, teamId, weekStart, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type TeamDigestMutationResult = NonNullable<
+  Awaited<ReturnType<typeof teamDigest>>
+>;
+
+export type TeamDigestMutationError = ErrorType<HTTPValidationError>;
+
+/**
+ * @summary Team Digest
+ */
+export const useTeamDigest = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof teamDigest>>,
+      TError,
+      { organizationId: string; teamId: string; weekStart: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient
+): UseMutationResult<
+  Awaited<ReturnType<typeof teamDigest>>,
+  TError,
+  { organizationId: string; teamId: string; weekStart: string },
+  TContext
+> => {
+  return useMutation(getTeamDigestMutationOptions(options), queryClient);
 };

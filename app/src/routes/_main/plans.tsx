@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import {
+  endOfWeekSummary,
   generatePlan,
   lookBackBeforePlanning,
   reviewPlan,
@@ -13,7 +14,12 @@ import {
   saveDraft,
   submitPlan,
 } from "@/api/endpoints/plans/plans";
-import type { LookbackAdvice, PlanResponse, PlanReview } from "@/api/model";
+import type {
+  LookbackAdvice,
+  PlanResponse,
+  PlanReview,
+  WeeklySummary,
+} from "@/api/model";
 import { useOrganization } from "@/contexts/organization-context";
 import { ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -62,6 +68,15 @@ function PlansPage() {
   const [lookbackError, setLookbackError] = useState("");
   const lookbackVersion = useRef(0);
   const currentScope = useRef("");
+  const [summaryExplanation, setSummaryExplanation] = useState("");
+  const [weeklySummary, setWeeklySummary] = useState<{
+    scope: string;
+    data: WeeklySummary;
+    editedNote: string;
+  } | null>(null);
+  const [summaryError, setSummaryError] = useState("");
+  const summaryVersion = useRef(0);
+  const currentSummaryScope = useRef("");
   const [message, setMessage] = useState("");
   const [loadedKey, setLoadedKey] = useState("");
   const plans = useQuery({
@@ -72,6 +87,20 @@ function PlansPage() {
   const selected = plans.data?.find((p) => p.week_start === week);
   const scopeKey = `${orgId}:${week}`;
   currentScope.current = scopeKey;
+  const summaryScope = JSON.stringify([
+    orgId,
+    week,
+    selected?.id ?? null,
+    selected?.status ?? null,
+    selected?.main_shipped ?? null,
+    selected?.tasks.map((task) => [task.id, task.kind, task.text, task.is_done]) ?? [],
+  ]);
+  if (currentSummaryScope.current !== summaryScope) {
+    currentSummaryScope.current = summaryScope;
+    summaryVersion.current += 1;
+    if (weeklySummary) setWeeklySummary(null);
+    if (summaryError) setSummaryError("");
+  }
 
   const selectedKey = `${orgId}:${week}:${selected?.id ?? "new"}:${selected?.status ?? ""}`;
   if (loadedKey !== selectedKey) {
@@ -91,6 +120,10 @@ function PlansPage() {
     setReview(null);
     setLookbackAdvice(null);
     setLookbackError("");
+    summaryVersion.current += 1;
+    setWeeklySummary(null);
+    setSummaryError("");
+    setSummaryExplanation("");
     setMessage("");
   }
 
@@ -100,7 +133,14 @@ function PlansPage() {
     setLookbackError("");
   }
 
+  function clearSummary() {
+    summaryVersion.current += 1;
+    setWeeklySummary(null);
+    setSummaryError("");
+  }
+
   const refresh = async (updated: PlanResponse) => {
+    clearSummary();
     setPlan(updated);
     await queryClient.invalidateQueries({ queryKey: ["my-plans", orgId] });
   };
@@ -149,6 +189,7 @@ function PlansPage() {
     mutationFn: () => generatePlan(orgId, { notes }),
     onSuccess: (result) => {
       clearLookback();
+      clearSummary();
       setTasks(
         result.tasks.map((t) => ({
           id: crypto.randomUUID(),
@@ -195,8 +236,58 @@ function PlansPage() {
     });
   }
 
+  const aiSummary = useMutation({
+    mutationFn: ({ organizationId, planId, explanation }: {
+      organizationId: string;
+      planId: string;
+      weekStart: string;
+      scope: string;
+      version: number;
+      explanation: string;
+    }) => endOfWeekSummary(
+      organizationId,
+      planId,
+      explanation ? { unfinished_explanation: explanation } : {},
+    ),
+    onSuccess: (result, request) => {
+      if (
+        currentSummaryScope.current === request.scope &&
+        orgId === request.organizationId &&
+        week === request.weekStart &&
+        summaryVersion.current === request.version
+      ) {
+        setWeeklySummary({ scope: request.scope, data: result, editedNote: result.summary });
+      }
+    },
+    onError: (error, request) => {
+      if (
+        currentSummaryScope.current === request.scope &&
+        orgId === request.organizationId &&
+        week === request.weekStart &&
+        summaryVersion.current === request.version
+      ) {
+        setSummaryError(errorMessage(error));
+      }
+    },
+  });
+
+  function requestSummary() {
+    if (!orgId || !plan || !selected || plan.id !== selected.id ||
+        aiSummary.isPending || busy || summaryExplanation.length > 1000) return;
+    clearSummary();
+    aiSummary.mutate({
+      organizationId: orgId,
+      planId: plan.id,
+      weekStart: week,
+      scope: summaryScope,
+      version: summaryVersion.current,
+      explanation: summaryExplanation.trim(),
+    });
+  }
+
   function updateTask(id: string, changes: Partial<DraftTask>) {
     clearLookback();
+    clearSummary();
     setTasks((current) =>
       current.map((task) => (task.id === id ? { ...task, ...changes } : task))
     );
@@ -204,11 +295,14 @@ function PlansPage() {
   }
   function addTask(kind: DraftTask["kind"]) {
     clearLookback();
+    clearSummary();
     setTasks((current) => [
       ...current,
       { id: crypto.randomUUID(), kind, text: "", why_it_matters: "" },
     ]);
   }
+  const visibleSummary = weeklySummary?.scope === summaryScope ? weeklySummary : null;
+  const savedPlanSelected = !!plan && selected?.id === plan.id && plan.week_start === week;
   const busy =
     save.isPending ||
     submit.isPending ||
@@ -244,6 +338,7 @@ function PlansPage() {
             value={week}
             onChange={(e) => {
               clearLookback();
+              clearSummary();
               setWeek(e.target.value);
             }}
           />
@@ -379,6 +474,7 @@ function PlansPage() {
                         className="cursor-pointer text-sm text-red-700"
                         onClick={() => {
                           clearLookback();
+                          clearSummary();
                           setTasks((all) => all.filter((t) => t.id !== task.id));
                         }}
                       >
@@ -451,6 +547,7 @@ function PlansPage() {
                           className="mt-2 cursor-pointer"
                           onClick={() => {
                             clearLookback();
+                            clearSummary();
                             setTasks((current) =>
                               current.map((item) =>
                                 item.id === task.id
@@ -569,6 +666,125 @@ function PlansPage() {
               )}
             </div>
           </div>
+          <section className="rounded-xl border bg-white p-5">
+            <h2 className="text-lg font-semibold">End-of-week Summary</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Generate a short note from your saved plan and recorded task progress.
+              Task completion and the main goal’s shipped status are reported separately.
+              The note stays editable here and is not saved automatically.
+            </p>
+            {!savedPlanSelected ? (
+              <p className="mt-4 text-sm text-muted-foreground">
+                Save a plan for this week before generating a summary.
+              </p>
+            ) : (
+              <>
+                <label className="mt-4 block text-sm font-medium" htmlFor="summary-explanation">
+                  Reason for unfinished work (optional)
+                </label>
+                <Textarea
+                  id="summary-explanation"
+                  className="mt-2"
+                  maxLength={1000}
+                  value={summaryExplanation}
+                  placeholder="Add a reason only if you know it."
+                  onChange={(event) => {
+                    clearSummary();
+                    setSummaryExplanation(event.target.value);
+                  }}
+                />
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {summaryExplanation.length}/1000 characters. This explanation is sent only
+                  when you generate the summary.
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="mt-4 cursor-pointer"
+                  disabled={aiSummary.isPending || busy || plans.isLoading}
+                  onClick={requestSummary}
+                >
+                  {aiSummary.isPending ? "Generating…" : "Generate AI Summary"}
+                </Button>
+              </>
+            )}
+            {summaryError && (
+              <p className="mt-3 text-sm text-red-700" role="alert">
+                {summaryError} You can keep planning normally.
+              </p>
+            )}
+            {visibleSummary && (
+              <div className="mt-5 space-y-4 text-sm" aria-live="polite">
+                <div className="rounded-lg bg-[#F7F9FC] p-4">
+                  <h3 className="font-semibold">What shipped</h3>
+                  <p className="mt-1">
+                    {visibleSummary.data.main_goal_shipped === true
+                      ? visibleSummary.data.shipped_main_goal ?? "Main goal shipped."
+                      : visibleSummary.data.main_goal_shipped === false
+                        ? "The main goal did not ship."
+                        : "The main goal’s shipped outcome has not been recorded."}
+                  </p>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <h3 className="font-semibold">Completed tasks</h3>
+                    {visibleSummary.data.completed_tasks.length ? (
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        {visibleSummary.data.completed_tasks.map((task) => (
+                          <li key={task.id}>{task.text}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-muted-foreground">No tasks are marked complete.</p>
+                    )}
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">What remains incomplete</h3>
+                    {visibleSummary.data.incomplete_tasks.length ? (
+                      <ul className="mt-2 list-inside list-disc space-y-1">
+                        {visibleSummary.data.incomplete_tasks.map((task) => (
+                          <li key={task.id}>{task.text}</li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="mt-2 text-muted-foreground">No tasks remain incomplete.</p>
+                    )}
+                  </div>
+                </div>
+                {(visibleSummary.data.incomplete_tasks.length > 0 ||
+                  visibleSummary.data.main_goal_shipped === false) && (
+                  <p>
+                    <strong>Known reason:</strong>{" "}
+                    {visibleSummary.data.known_reason ?? "No reason was provided."}
+                  </p>
+                )}
+                {visibleSummary.data.next_week_follow_up && (
+                  <p>
+                    <strong>Possible next-week follow-up:</strong>{" "}
+                    {visibleSummary.data.next_week_follow_up}
+                  </p>
+                )}
+                <div>
+                  <label className="block font-semibold" htmlFor="editable-summary-note">
+                    Editable AI-generated note (local only)
+                  </label>
+                  <Textarea
+                    id="editable-summary-note"
+                    className="mt-2"
+                    value={visibleSummary.editedNote}
+                    onChange={(event) => setWeeklySummary((current) =>
+                      current && current.scope === summaryScope
+                        ? { ...current, editedNote: event.target.value }
+                        : current
+                    )}
+                  />
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    Edit this note freely. Changes are not saved to the plan.
+                  </p>
+                </div>
+              </div>
+            )}
+          </section>
           {editable && (
             <section className="rounded-xl border bg-white p-5">
               <h2 className="text-lg font-semibold">Start from a brain dump</h2>
@@ -615,7 +831,10 @@ function PlansPage() {
                   key={p.id}
                   variant={week === p.week_start ? "default" : "outline"}
                   className="cursor-pointer"
-                  onClick={() => setWeek(p.week_start)}
+                  onClick={() => {
+                    clearSummary();
+                    setWeek(p.week_start);
+                  }}
                 >
                   {p.week_start} · {p.status}
                 </Button>

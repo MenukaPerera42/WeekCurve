@@ -159,3 +159,90 @@ export const EndOfWeekSummaryResponse = zod.object({
   summary: zod.string(),
   next_week_follow_up: zod.union([zod.string(), zod.null()]),
 });
+
+/**
+ * @summary Team Digest
+ */
+export const TeamDigestParams = zod.object({
+  organization_id: zod.string().uuid(),
+  team_id: zod.string().uuid(),
+  week_start: zod.string().date(),
+});
+
+export const TeamDigestResponse = zod.object({
+  team_id: zod.string().uuid(),
+  week_start: zod.string().date(),
+  member_count: zod.number().int(),
+  submitted_count: zod.number().int(),
+  draft_count: zod.number().int(),
+  not_started_count: zod.number().int(),
+  awaiting_approval_count: zod.number().int(),
+  approved_count: zod.number().int(),
+  done_count: zod.number().int(),
+  members: zod.array(
+    zod.object({
+      member_id: zod.string().uuid(),
+      name: zod.string(),
+      plan_id: zod.union([zod.string().uuid(), zod.null()]),
+      status: zod.enum([
+        "not_started",
+        "draft",
+        "submitted",
+        "approved",
+        "done",
+      ]),
+      tasks_done: zod.number().int(),
+      tasks_total: zod.number().int(),
+      main_shipped: zod.union([zod.boolean(), zod.null()]),
+    })
+  ),
+  missing_submissions: zod.array(
+    zod.object({
+      member_id: zod.string().uuid(),
+      name: zod.string(),
+      plan_id: zod.union([zod.string().uuid(), zod.null()]),
+      status: zod.enum([
+        "not_started",
+        "draft",
+        "submitted",
+        "approved",
+        "done",
+      ]),
+      tasks_done: zod.number().int(),
+      tasks_total: zod.number().int(),
+      main_shipped: zod.union([zod.boolean(), zod.null()]),
+    })
+  ),
+  incomplete_work: zod.array(
+    zod.object({
+      evidence_id: zod.string(),
+      kind: zod.enum([
+        "missing_plan",
+        "draft_plan",
+        "incomplete_task",
+        "unshipped_main_goal",
+      ]),
+      member_id: zod.string().uuid(),
+      plan_id: zod.union([zod.string().uuid(), zod.null()]),
+      task_id: zod.union([zod.string().uuid(), zod.null()]),
+      detail: zod.string(),
+    })
+  ),
+  progress_summary: zod.string(),
+  delivery_risks: zod.array(
+    zod.object({
+      evidence_id: zod.string(),
+      kind: zod.enum([
+        "missing_plan",
+        "draft_plan",
+        "incomplete_task",
+        "unshipped_main_goal",
+      ]),
+      member_id: zod.string().uuid(),
+      plan_id: zod.union([zod.string().uuid(), zod.null()]),
+      task_id: zod.union([zod.string().uuid(), zod.null()]),
+      detail: zod.string(),
+    })
+  ),
+  recommended_actions: zod.array(zod.string()),
+});
