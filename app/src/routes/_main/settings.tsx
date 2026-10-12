@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   createInvite,
   listMembers,
@@ -26,8 +26,16 @@ function SettingsPage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [inviteRole, setInviteRole] = useState("member");
-  const [inviteToken, setInviteToken] = useState("");
+  const [inviteResult, setInviteResult] = useState<{
+    organizationId: string;
+    token: string;
+  } | null>(null);
   const [copied, setCopied] = useState(false);
+  useEffect(() => {
+    setInviteResult(null);
+    setCopied(false);
+    setInviteRole("member");
+  }, [orgId]);
   const members = useQuery({
     queryKey: ["org-members", orgId],
     queryFn: () => listMembers(orgId),
@@ -41,9 +49,10 @@ function SettingsPage() {
     },
   });
   const invite = useMutation({
-    mutationFn: () => createInvite(orgId, { email: email.trim(), role: inviteRole }),
-    onSuccess: (result) => {
-      setInviteToken(result.token);
+    mutationFn: (invitationOrgId: string) =>
+      createInvite(invitationOrgId, { email: email.trim(), role: inviteRole }),
+    onSuccess: (result, invitationOrgId) => {
+      setInviteResult({ organizationId: invitationOrgId, token: result.token });
       setCopied(false);
     },
   });
@@ -58,8 +67,8 @@ function SettingsPage() {
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: ["org-members", orgId] }),
   });
-  const invitationUrl = inviteToken
-    ? `${window.location.origin}/signup?invite=${encodeURIComponent(inviteToken)}`
+  const invitationUrl = inviteResult?.organizationId === orgId
+    ? `${window.location.origin}/signup?invite=${encodeURIComponent(inviteResult.token)}`
     : "";
   const error =
     rename.error || changeRole.error || remove.error;
@@ -96,6 +105,7 @@ function SettingsPage() {
                   onChange={(e) => setName(e.target.value)}
                 />
                 <Button
+                  type="submit"
                   className="cursor-pointer"
                   disabled={name.trim().length < 2 || rename.isPending}
                 >
@@ -182,9 +192,9 @@ function SettingsPage() {
                 onSubmit={(e) => {
                   e.preventDefault();
                   if (!orgId || invite.isPending || !email.trim()) return;
-                  setInviteToken("");
+                  setInviteResult(null);
                   setCopied(false);
-                  invite.mutate();
+                  invite.mutate(orgId);
                 }}
               >
                 <Input

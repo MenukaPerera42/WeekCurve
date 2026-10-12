@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, date, datetime
 from uuid import NAMESPACE_URL, uuid5
 
 import pytest
@@ -209,6 +209,57 @@ async def test_staff_deactivation_revokes_existing_customer_session(
     assert (await async_client.get(
         f"/app/organizations/{admin_case['org_b']}"
     )).status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_staff_search_and_deactivation_exclude_revoked_organizations(
+    async_client, session_factory, admin_case
+):
+    member_id = admin_case["member"]
+    staff_id = admin_case["staff"]
+    async with session_factory() as db:
+        membership = await db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == admin_case["org_a"],
+            OrganizationMembership.user_id == member_id,
+        ))
+        member = await db.get(User, member_id)
+        staff = await db.get(User, staff_id)
+        assert membership is not None and member is not None and staff is not None
+        membership.revoked_at = datetime.now(UTC)
+        member_email, staff_email = member.email, staff.email
+        await db.commit()
+
+    as_user(async_client, staff_id, JWT_AUDIENCE_INTERNAL)
+    found = await async_client.get("/internal/users/search", params={"q": member_email})
+    assert found.status_code == 200, found.text
+    assert len(found.json()) == 1
+    assert found.json()[0]["id"] == str(member_id)
+    assert found.json()[0]["organizations"] == ["Customer B"]
+    assert found.json()[0]["is_active"] is True
+    assert found.json()[0]["is_admin"] is False
+
+    staff_found = await async_client.get("/internal/users/search", params={"q": staff_email})
+    assert staff_found.status_code == 200, staff_found.text
+    assert len(staff_found.json()) == 1
+    assert staff_found.json()[0]["organizations"] == []
+    assert staff_found.json()[0]["is_active"] is True
+    assert staff_found.json()[0]["is_admin"] is True
+
+    deactivated = await async_client.post(
+        f"/internal/users/{member_id}/deactivate", headers=ORIGIN
+    )
+    assert deactivated.status_code == 200, deactivated.text
+    assert deactivated.json()["organizations"] == ["Customer B"]
+    assert deactivated.json()["is_active"] is False
+    assert deactivated.json()["is_admin"] is False
+    async with session_factory() as db:
+        member = await db.get(User, member_id)
+        membership = await db.scalar(select(OrganizationMembership).where(
+            OrganizationMembership.organization_id == admin_case["org_a"],
+            OrganizationMembership.user_id == member_id,
+        ))
+        assert member is not None and member.is_active is False
+        assert membership is not None and membership.revoked_at is not None
 
 
 @pytest.mark.asyncio

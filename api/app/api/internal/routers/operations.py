@@ -111,7 +111,8 @@ async def search_users(staff: CurrentInternalUser, session: DBSession,
     for user in users:
         orgs = (await session.scalars(select(Organization.name)
             .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
-            .where(OrganizationMembership.user_id == user.id))).all()
+            .where(OrganizationMembership.user_id == user.id,
+                   OrganizationMembership.revoked_at.is_(None)))).all()
         result.append(UserSearchItem(id=user.id, email=user.email, first_name=user.first_name,
             last_name=user.last_name, is_active=user.is_active, is_admin=user.is_admin,
             organizations=list(orgs)))
@@ -128,7 +129,8 @@ async def deactivate_user(user_id: uuid.UUID, staff: CurrentInternalUser,
     await session.commit()
     orgs = (await session.scalars(select(Organization.name)
         .join(OrganizationMembership, OrganizationMembership.organization_id == Organization.id)
-        .where(OrganizationMembership.user_id == user.id))).all()
+        .where(OrganizationMembership.user_id == user.id,
+               OrganizationMembership.revoked_at.is_(None)))).all()
     return UserSearchItem(id=user.id, email=user.email, first_name=user.first_name,
         last_name=user.last_name, is_active=False, is_admin=user.is_admin, organizations=list(orgs))
 
