@@ -75,3 +75,45 @@ export const GeneratePlanResponse = zod.object({
     })
   ),
 });
+
+/**
+ * @summary Look Back Before Planning
+ */
+export const LookBackBeforePlanningParams = zod.object({
+  organization_id: zod.string().uuid(),
+  week_start: zod.string().date(),
+});
+
+export const lookBackBeforePlanningResponseRepeatedWorkItemDescriptionMin = 5;
+
+export const lookBackBeforePlanningResponseRepeatedWorkItemEvidenceMin = 2;
+
+export const lookBackBeforePlanningResponseRepeatedWorkItemSuggestedAdjustmentMin = 5;
+
+export const lookBackBeforePlanningResponseMessageMin = 5;
+
+export const LookBackBeforePlanningResponse = zod.object({
+  previous_weeks: zod.array(zod.string().date()),
+  repeated_work: zod.array(
+    zod.object({
+      description: zod
+        .string()
+        .min(lookBackBeforePlanningResponseRepeatedWorkItemDescriptionMin),
+      evidence: zod
+        .array(
+          zod.object({
+            plan_id: zod.string().uuid(),
+            task_id: zod.string().uuid(),
+          })
+        )
+        .min(lookBackBeforePlanningResponseRepeatedWorkItemEvidenceMin),
+      suggested_adjustment: zod
+        .string()
+        .min(
+          lookBackBeforePlanningResponseRepeatedWorkItemSuggestedAdjustmentMin
+        ),
+    })
+  ),
+  planning_adjustments: zod.array(zod.string()),
+  message: zod.string().min(lookBackBeforePlanningResponseMessageMin),
+});

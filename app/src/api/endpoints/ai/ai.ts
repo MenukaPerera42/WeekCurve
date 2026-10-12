@@ -17,6 +17,7 @@ import type {
   BrainDumpRequest,
   GeneratedPlan,
   HTTPValidationError,
+  LookbackAdvice,
   PlanReview,
   ReviewRequest,
 } from "../../model";
@@ -203,4 +204,101 @@ export const useGeneratePlan = <
   TContext
 > => {
   return useMutation(getGeneratePlanMutationOptions(options), queryClient);
+};
+export const getLookBackBeforePlanningUrl = (
+  organizationId: string,
+  weekStart: string
+) => {
+  return `/organizations/${organizationId}/ai/weeks/${weekStart}/look-back`;
+};
+
+/**
+ * @summary Look Back Before Planning
+ */
+export const lookBackBeforePlanning = async (
+  organizationId: string,
+  weekStart: string,
+  options?: Parameters<typeof customInstance>[1]
+): Promise<LookbackAdvice> => {
+  return customInstance<LookbackAdvice>(
+    getLookBackBeforePlanningUrl(organizationId, weekStart),
+    {
+      ...options,
+      method: "POST",
+    }
+  );
+};
+
+export const getLookBackBeforePlanningMutationOptions = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(options?: {
+  mutation?: UseMutationOptions<
+    Awaited<ReturnType<typeof lookBackBeforePlanning>>,
+    TError,
+    { organizationId: string; weekStart: string },
+    TContext
+  >;
+  request?: SecondParameter<typeof customInstance>;
+}): UseMutationOptions<
+  Awaited<ReturnType<typeof lookBackBeforePlanning>>,
+  TError,
+  { organizationId: string; weekStart: string },
+  TContext
+> => {
+  const mutationKey = ["lookBackBeforePlanning"];
+  const { mutation: mutationOptions, request: requestOptions } = options
+    ? options.mutation &&
+      "mutationKey" in options.mutation &&
+      options.mutation.mutationKey
+      ? options
+      : { ...options, mutation: { ...options.mutation, mutationKey } }
+    : { mutation: { mutationKey }, request: undefined };
+
+  const mutationFn: MutationFunction<
+    Awaited<ReturnType<typeof lookBackBeforePlanning>>,
+    { organizationId: string; weekStart: string }
+  > = (props) => {
+    const { organizationId, weekStart } = props ?? {};
+
+    return lookBackBeforePlanning(organizationId, weekStart, requestOptions);
+  };
+
+  return { mutationFn, ...mutationOptions };
+};
+
+export type LookBackBeforePlanningMutationResult = NonNullable<
+  Awaited<ReturnType<typeof lookBackBeforePlanning>>
+>;
+
+export type LookBackBeforePlanningMutationError =
+  ErrorType<HTTPValidationError>;
+
+/**
+ * @summary Look Back Before Planning
+ */
+export const useLookBackBeforePlanning = <
+  TError = ErrorType<HTTPValidationError>,
+  TContext = unknown,
+>(
+  options?: {
+    mutation?: UseMutationOptions<
+      Awaited<ReturnType<typeof lookBackBeforePlanning>>,
+      TError,
+      { organizationId: string; weekStart: string },
+      TContext
+    >;
+    request?: SecondParameter<typeof customInstance>;
+  },
+  queryClient?: QueryClient
+): UseMutationResult<
+  Awaited<ReturnType<typeof lookBackBeforePlanning>>,
+  TError,
+  { organizationId: string; weekStart: string },
+  TContext
+> => {
+  return useMutation(
+    getLookBackBeforePlanningMutationOptions(options),
+    queryClient
+  );
 };

@@ -1,4 +1,5 @@
 import uuid
+from datetime import date
 
 from fastapi import APIRouter
 from pydantic import Field
@@ -6,7 +7,7 @@ from pydantic import Field
 from app.api.app.tenant import CurrentMembership
 from app.database import DBSession
 from app.schemas import Model
-from app.services.ai import AIService, GeneratedPlan, PlanReview, ReviewTask
+from app.services.ai import AIService, GeneratedPlan, LookbackAdvice, PlanReview, ReviewTask
 
 router = APIRouter()
 
@@ -33,5 +34,16 @@ async def generate_plan(organization_id: uuid.UUID, data: BrainDumpRequest,
                         membership: CurrentMembership, session: DBSession) -> GeneratedPlan:
     try:
         return await AIService(session, organization_id, membership.id).generate(data.notes)
+    finally:
+        await session.commit()
+
+
+@router.post("/organizations/{organization_id}/ai/weeks/{week_start}/look-back", tags=["ai"])
+async def look_back_before_planning(
+    organization_id: uuid.UUID, week_start: date,
+    membership: CurrentMembership, session: DBSession,
+) -> LookbackAdvice:
+    try:
+        return await AIService(session, organization_id, membership.id).look_back(week_start)
     finally:
         await session.commit()

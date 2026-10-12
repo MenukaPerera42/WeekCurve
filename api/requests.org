@@ -234,6 +234,11 @@ POST /organizations/{{(verb-var organization-id)}}/ai/draft
 Content-Type: application/json
 {"notes":"Finish billing, fix the webhook bug, publish release notes."}
 
+** Look back before planning
+POST /organizations/{{(verb-var organization-id)}}/ai/weeks/2026-10-12/look-back
+# Requires an active organization membership; week_start must be a Monday.
+# No request body. Returns previous_weeks, repeated_work, planning_adjustments, and message.
+
 * WeekCurve platform API                                               :verb:
 Template http://localhost:8000/internal
 # Requires an internal-audience staff session.
