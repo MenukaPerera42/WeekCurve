@@ -1,11 +1,9 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Eye, EyeOff, Lock, LogIn, Mail, ShieldCheck } from "lucide-react";
 import { Eye, EyeOff, Lock, LogIn, Mail, ShieldAlert } from "lucide-react";
 import { auth } from "@/api/endpoints/auth/auth";
 import { applyApiErrorToForm } from "@/lib/api-error";
@@ -58,7 +56,6 @@ function Login() {
       // credentials 401 has no field and comes back as the form-level message.
       const formError = applyApiErrorToForm(error, form.setError, {
         fields: ["email", "password"],
-        fallback: "Login failed. Please try again.",
         fallback: "Login failed. Please check your credentials.",
       });
       setLoginError(formError ?? "");
@@ -71,19 +68,8 @@ function Login() {
   };
 
   return (
-    // The internal console is an internal tool, so its sign-in deliberately
-    // diverges from the customer-facing login: a forced-dark, utilitarian
-    // "restricted access" surface that makes the context unmistakable. We pin
-    // `dark` here (rather than following theme) so the look is consistent for
-    // everyone regardless of their console theme preference.
-    <div className="dark flex min-h-screen items-center justify-center bg-background text-foreground p-6">
-      <div className="w-full max-w-sm">
-        <div className="mb-8 flex flex-col items-center gap-5 text-center">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-muted/60 px-3 py-1 font-mono text-[11px] font-medium uppercase tracking-widest text-muted-foreground">
-            <ShieldCheck className="size-3.5 text-[#FF4F1F]" />
-            Internal · Restricted
     <div className="relative flex min-h-screen w-full flex-col justify-between bg-background text-foreground">
-      {/* Top Header with Brand Logo & Compact Theme Toggle */}
+      {/* Top Header with Brand Logo, Console Badge & Compact Theme Toggle */}
       <header className="flex items-center justify-between px-6 py-5 sm:px-8 lg:px-12">
         <div className="flex items-center gap-3">
           <Link to="/login" aria-label="WeekCurve Internal">
@@ -92,9 +78,6 @@ function Login() {
           <span className="rounded bg-muted px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
             Console
           </span>
-          <div>
-            <h1 className="text-2xl font-semibold tracking-tight">
-              Internal console
         </div>
         <ThemeToggle variant="compact" />
       </header>
@@ -113,39 +96,11 @@ function Login() {
             <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-3xl">
               Platform Administration
             </h1>
-            <p className="mt-1.5 text-sm text-muted-foreground">
-              Sign in with your staff credentials.
             <p className="mt-2 text-sm text-muted-foreground">
               Sign in with your authorized platform staff credentials.
             </p>
           </div>
-        </div>
 
-        <div className="rounded-xl border bg-card p-6 shadow-sm">
-          <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-              <FormField
-                control={form.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Mail className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type="email"
-                          placeholder="you@example.com"
-                          className="h-11 pl-9"
-                          autoComplete="email"
-                          {...field}
-                        />
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
           {/* Centered Staff Login Card */}
           <div className="rounded-2xl border border-border bg-card p-6 shadow-sm sm:p-8">
             <Form {...form}>
@@ -173,41 +128,6 @@ function Login() {
                   )}
                 />
 
-              <FormField
-                control={form.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <FormControl>
-                      <div className="relative">
-                        <Lock className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                          type={showPassword ? "text" : "password"}
-                          placeholder="Password"
-                          className="h-11 pl-9 pr-9"
-                          autoComplete="current-password"
-                          {...field}
-                        />
-                        <button
-                          type="button"
-                          onClick={() => setShowPassword((v) => !v)}
-                          disabled={!field.value?.length}
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground transition-colors hover:text-foreground disabled:pointer-events-none disabled:opacity-40"
-                          aria-label={
-                            showPassword ? "Hide password" : "Show password"
-                          }
-                        >
-                          {showPassword ? (
-                            <EyeOff className="size-4" />
-                          ) : (
-                            <Eye className="size-4" />
-                          )}
-                        </button>
-                      </div>
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
                 <FormField
                   control={form.control}
                   name="password"
@@ -252,13 +172,7 @@ function Login() {
                     {loginError}
                   </div>
                 )}
-              />
 
-              {loginError && (
-                <div className="rounded-md border border-destructive/20 bg-destructive/10 p-3 text-center text-sm text-destructive">
-                  {loginError}
-                </div>
-              )}
                 <Button
                   type="submit"
                   className="h-11 w-full rounded-lg text-sm font-medium cursor-pointer shadow-xs"
@@ -271,22 +185,11 @@ function Login() {
             </Form>
           </div>
 
-              <Button
-                type="submit"
-                className="h-11 w-full text-sm"
-                disabled={loginMutation.isPending || !form.formState.isValid}
-              >
-                <LogIn className="size-4" />
-                {loginMutation.isPending ? "Signing in..." : "Sign in"}
-              </Button>
-            </form>
-          </Form>
           {/* Subtitle notice */}
           <p className="mt-8 text-center text-xs text-muted-foreground">
             WeekCurve Platform Administration. Unauthorized access is logged and strictly prohibited.
           </p>
         </div>
-      </div>
       </main>
 
       {/* Footer */}
