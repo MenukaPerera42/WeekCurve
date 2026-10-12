@@ -315,7 +315,7 @@ function TeamsPage() {
               <h2 className="font-semibold">Team</h2>
               <select
                 aria-label="Select team"
-                className="rounded-md border border-input bg-background text-foreground px-3 py-2 cursor-pointer"
+                className="rounded-md border border-input bg-background text-foreground px-3 py-2 text-sm cursor-pointer"
                 value={activeTeamId}
                 onChange={(e) => {
                   setTeamId(e.target.value);

@@ -239,11 +239,11 @@ function DashboardPage() {
                     Successes
                   </span>
                   <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                    <span className="size-2.5 rounded-sm bg-[#60A5FA]" />
+                    <span className="size-2.5 rounded-sm bg-[#EF4444]" />
                     Failures
                   </span>
                   <span className="flex items-center gap-1.5 text-muted-foreground font-medium">
-                    <span className="size-2.5 rounded-sm bg-[#93C5FD]" />
+                    <span className="size-2.5 rounded-sm bg-[#F59E0B]" />
                     Rate Limited
                   </span>
                 </div>
@@ -276,7 +276,8 @@ function DashboardPage() {
                         cursor={{ fill: "var(--color-muted)", opacity: 0.3 }}
                         content={({ active, payload }) => {
                           if (!active || !payload?.length) return null;
-                          const d = payload[0].payload;
+                          const d = payload[0]?.payload;
+                          if (!d) return null;
                           return (
                             <div className="rounded-xl border border-border bg-popover p-3 shadow-md text-xs text-popover-foreground space-y-1">
                               <p className="font-semibold text-foreground">{d.fullName}</p>
@@ -289,17 +290,17 @@ function DashboardPage() {
                               </div>
                               <div className="flex items-center justify-between gap-4">
                                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                                  <span className="size-2 rounded-full bg-[#60A5FA]" />
+                                  <span className="size-2 rounded-full bg-[#EF4444]" />
                                   Failures:
                                 </span>
-                                <span className="font-bold text-foreground">{d.failures}</span>
+                                <span className="font-bold text-[#EF4444]">{d.failures}</span>
                               </div>
                               <div className="flex items-center justify-between gap-4">
                                 <span className="flex items-center gap-1.5 text-muted-foreground">
-                                  <span className="size-2 rounded-full bg-[#93C5FD]" />
+                                  <span className="size-2 rounded-full bg-[#F59E0B]" />
                                   Rate limited:
                                 </span>
-                                <span className="font-bold text-foreground">{d.rateLimited}</span>
+                                <span className="font-bold text-[#F59E0B]">{d.rateLimited}</span>
                               </div>
                               <div className="flex items-center justify-between gap-4 border-t border-border pt-1">
                                 <span className="text-muted-foreground">Total Invocations:</span>
@@ -310,8 +311,8 @@ function DashboardPage() {
                         }}
                       />
                       <Bar dataKey="successes" name="Successes" fill="#2563EB" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                      <Bar dataKey="failures" name="Failures" fill="#60A5FA" radius={[4, 4, 0, 0]} maxBarSize={28} />
-                      <Bar dataKey="rateLimited" name="Rate limited" fill="#93C5FD" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      <Bar dataKey="failures" name="Failures" fill="#EF4444" radius={[4, 4, 0, 0]} maxBarSize={28} />
+                      <Bar dataKey="rateLimited" name="Rate limited" fill="#F59E0B" radius={[4, 4, 0, 0]} maxBarSize={28} />
                     </BarChart>
                   </ResponsiveContainer>
                 </div>

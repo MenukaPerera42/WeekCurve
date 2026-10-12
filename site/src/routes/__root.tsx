@@ -13,8 +13,25 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Weekly planning and delivery tracking for small software teams.",
+          "Weekly planning for software teams that want clear goals, useful approvals, and a Friday finish.",
       },
+      { property: "og:type", content: "website" },
+      { property: "og:site_name", content: "WeekCurve" },
+      { property: "og:title", content: "WeekCurve — Plan the week. Ship the goal." },
+      {
+        property: "og:description",
+        content:
+          "Weekly planning for software teams that want clear goals, useful approvals, and a Friday finish.",
+      },
+      { property: "og:image", content: "/og-weekcurve.png" },
+      { name: "twitter:card", content: "summary_large_image" },
+      { name: "twitter:title", content: "WeekCurve — Plan the week. Ship the goal." },
+      {
+        name: "twitter:description",
+        content:
+          "Weekly planning for software teams that want clear goals, useful approvals, and a Friday finish.",
+      },
+      { name: "twitter:image", content: "/og-weekcurve.png" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
@@ -32,7 +49,7 @@ function RootDocument({ children }: { children: React.ReactNode }) {
         <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
-      <body className="antialiased">
+      <body className="antialiased min-h-screen bg-background text-foreground transition-colors duration-150">
         <ThemeProvider>
           {children}
         </ThemeProvider>
