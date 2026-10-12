@@ -7,7 +7,9 @@ from pydantic import Field
 from app.api.app.tenant import CurrentMembership
 from app.database import DBSession
 from app.schemas import Model
-from app.services.ai import AIService, GeneratedPlan, LookbackAdvice, PlanReview, ReviewTask
+from app.services.ai import (
+    AIService, GeneratedPlan, LookbackAdvice, PlanReview, ReviewTask, WeeklySummary,
+)
 
 router = APIRouter()
 
@@ -18,6 +20,10 @@ class ReviewRequest(Model):
 
 class BrainDumpRequest(Model):
     notes: str = Field(min_length=15, max_length=5000)
+
+
+class WeeklySummaryRequest(Model):
+    unfinished_explanation: str | None = Field(default=None, min_length=1, max_length=1000)
 
 
 @router.post("/organizations/{organization_id}/ai/review", tags=["ai"])
@@ -45,5 +51,18 @@ async def look_back_before_planning(
 ) -> LookbackAdvice:
     try:
         return await AIService(session, organization_id, membership.id).look_back(week_start)
+    finally:
+        await session.commit()
+
+
+@router.post("/organizations/{organization_id}/ai/plans/{plan_id}/end-of-week-summary", tags=["ai"])
+async def end_of_week_summary(
+    organization_id: uuid.UUID, plan_id: uuid.UUID, data: WeeklySummaryRequest,
+    membership: CurrentMembership, session: DBSession,
+) -> WeeklySummary:
+    try:
+        return await AIService(session, organization_id, membership.id).summarize_week(
+            plan_id, data.unfinished_explanation,
+        )
     finally:
         await session.commit()

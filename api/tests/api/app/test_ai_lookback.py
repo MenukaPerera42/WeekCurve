@@ -3,7 +3,7 @@ import uuid
 
 import pytest
 from pydantic_ai.exceptions import ModelHTTPError
-from pydantic_ai.messages import ModelResponse, ToolCallPart, ToolReturnPart
+from pydantic_ai.messages import ModelResponse, RetryPromptPart, ToolCallPart, ToolReturnPart
 from pydantic_ai.models.function import FunctionModel
 from sqlalchemy import func, select
 
@@ -104,6 +104,25 @@ def tool_model(output, calls):
 def output_without_tool_model(output):
     async def respond(messages, info):
         return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
+
+    return FunctionModel(respond)
+
+
+def correcting_tool_model(first_output, corrected_output, calls, feedback):
+    async def respond(messages, info):
+        returned = [part for message in messages for part in message.parts
+                    if isinstance(part, ToolReturnPart) and part.tool_name == "previous_two_plans"]
+        if not returned:
+            calls.append("tool")
+            return ModelResponse(parts=[ToolCallPart("previous_two_plans", {})])
+        if "first_output" not in calls:
+            calls.append("first_output")
+            return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, first_output)])
+        retries = [part for message in messages for part in message.parts
+                   if isinstance(part, RetryPromptPart)]
+        feedback.extend(str(part.content) for part in retries)
+        calls.append("corrected_output")
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, corrected_output)])
 
     return FunctionModel(respond)
 
@@ -219,13 +238,99 @@ async def test_invalid_historical_reference_is_rejected_and_recorded(lookback_ca
 
 
 @pytest.mark.asyncio
+async def test_one_invalid_reference_then_valid_correction_succeeds_without_saving(
+    lookback_case,
+):
+    case = lookback_case
+    invalid = valid_output(case)
+    invalid["repeated_work"][0]["evidence"][0]["task_id"] = str(
+        case["plans"]["foreign"][1]
+    )
+    before = await case["db"].scalar(select(func.count()).select_from(WeeklyPlan))
+    calls, feedback = [], []
+    advice = await AIService(
+        case["db"], case["org"], case["member"],
+        model=correcting_tool_model(invalid, valid_output(case), calls, feedback),
+    ).look_back(date(2026, 10, 12))
+    await case["db"].commit()
+
+    assert calls == ["tool", "first_output", "corrected_output"]
+    assert len(feedback) == 1
+    assert "exact plan_id and task_id pairs" in feedback[0]
+    assert str(case["plans"]["foreign"][1]) not in feedback[0]
+    assert {reference.task_id for reference in advice.repeated_work[0].evidence} == {
+        case["plans"]["latest"][1], case["plans"]["previous"][1]
+    }
+    assert await case["db"].scalar(select(func.count()).select_from(WeeklyPlan)) == before
+    usage = await case["db"].scalar(select(AIUsage).where(
+        AIUsage.organization_id == case["org"]
+    ))
+    assert usage.feature == "look_back" and usage.outcome == "success"
+
+
+@pytest.mark.asyncio
+async def test_persistently_invalid_evidence_stops_after_one_correction_attempt(
+    lookback_case,
+):
+    case = lookback_case
+    invalid = valid_output(case)
+    invalid["repeated_work"][0]["evidence"][0]["task_id"] = str(
+        case["plans"]["foreign"][1]
+    )
+    calls, feedback = [], []
+    with pytest.raises(APIException) as error:
+        await AIService(
+            case["db"], case["org"], case["member"],
+            model=correcting_tool_model(invalid, invalid, calls, feedback),
+        ).look_back(date(2026, 10, 12))
+    await case["db"].commit()
+
+    assert calls == ["tool", "first_output", "corrected_output"]
+    assert len(feedback) == 1
+    assert error.value.status_code == 503
+    assert error.value.code == "AI_INVALID_OUTPUT"
+    assert error.value.message == "AI returned unusable advice. Try again later."
+    usage = await case["db"].scalar(select(AIUsage).where(
+        AIUsage.organization_id == case["org"]
+    ))
+    assert usage.feature == "look_back" and usage.outcome == "invalid_output"
+
+
+@pytest.mark.asyncio
+async def test_no_repeated_work_is_valid_with_two_historical_plans(lookback_case):
+    case = lookback_case
+    latest_task = await case["db"].get(PlanTask, case["plans"]["latest"][1])
+    assert latest_task is not None
+    latest_task.text = "Publish customer help center"
+    await case["db"].flush()
+    output = {
+        "previous_weeks": ["2026-10-05", "2026-09-28"],
+        "repeated_work": [],
+        "planning_adjustments": ["Choose a realistic milestone for the coming week"],
+        "message": "No repeated unfinished work is supported by these plans.",
+    }
+    advice = await AIService(
+        case["db"], case["org"], case["member"],
+        model=tool_model(output, []),
+    ).look_back(date(2026, 10, 12))
+    await case["db"].commit()
+
+    assert advice.repeated_work == []
+    assert advice.planning_adjustments == output["planning_adjustments"]
+    usage = await case["db"].scalar(select(AIUsage).where(
+        AIUsage.organization_id == case["org"]
+    ))
+    assert usage.feature == "look_back" and usage.outcome == "success"
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("scenario", "reason", "tool_calls", "history_plans", "findings", "advice_items"),
     [
         ("tool_not_called", "tool_not_called", 0, 0, 1, 1),
         ("week_mismatch", "week_mismatch", 1, 2, 1, 1),
-        ("unknown_task", "unknown_or_completed_task", 1, 2, 1, 1),
-        ("completed_task", "unknown_or_completed_task", 1, 2, 1, 1),
+        ("unknown_task", "unknown_task_reference", 1, 2, 1, 1),
+        ("completed_task", "completed_task_reference", 1, 2, 1, 1),
         ("single_plan_evidence", "single_plan_evidence", 1, 2, 1, 1),
         ("no_history_with_advice", "no_history_with_advice", 1, 0, 0, 1),
     ],
@@ -285,17 +390,18 @@ async def test_invalid_output_logs_only_sanitized_reason_and_counts(
     events = [record.getMessage() for record in caplog.records
               if record.name == ai.logger.name
               and record.getMessage().startswith("look_back_validation_failure")]
-    assert events == [
+    expected_event = (
         "look_back_validation_failure feature=look_back "
         f"reason={reason} tool_calls={tool_calls} history_plans={history_plans} "
         f"findings={findings} advice_items={advice_items}"
-    ]
+    )
+    assert events == [expected_event, expected_event]
     for private_value in (
         str(case["org"]), str(case["member"]),
         *(str(identifier) for pair in case["plans"].values() for identifier in pair),
         "Deliver checkout", output["message"], "offline-test-key",
     ):
-        assert private_value not in events[0]
+        assert all(private_value not in event for event in events)
 
 
 @pytest.mark.asyncio
