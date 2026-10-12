@@ -13,6 +13,7 @@ from app.models import (
     AIUsage, Organization, OrganizationMembership, PlanTask, Team, User, WeeklyPlan,
 )
 from app.security import JWT_AUDIENCE_APP, generate_jwt_token
+from app.services import ai
 from app.services.ai import AIService, LookbackAdvice, LookbackDeps, previous_two_plans
 
 
@@ -95,6 +96,13 @@ def tool_model(output, calls):
             return ModelResponse(parts=[ToolCallPart("previous_two_plans", {})])
         calls.append("output")
         assert len(returned) == 1
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
+
+    return FunctionModel(respond)
+
+
+def output_without_tool_model(output):
+    async def respond(messages, info):
         return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
 
     return FunctionModel(respond)
@@ -208,6 +216,110 @@ async def test_invalid_historical_reference_is_rejected_and_recorded(lookback_ca
     assert error.value.code == "AI_INVALID_OUTPUT"
     usage = await case["db"].scalar(select(AIUsage).where(AIUsage.organization_id == case["org"]))
     assert usage.feature == "look_back" and usage.outcome == "invalid_output"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("scenario", "reason", "tool_calls", "history_plans", "findings", "advice_items"),
+    [
+        ("tool_not_called", "tool_not_called", 0, 0, 1, 1),
+        ("week_mismatch", "week_mismatch", 1, 2, 1, 1),
+        ("unknown_task", "unknown_or_completed_task", 1, 2, 1, 1),
+        ("completed_task", "unknown_or_completed_task", 1, 2, 1, 1),
+        ("single_plan_evidence", "single_plan_evidence", 1, 2, 1, 1),
+        ("no_history_with_advice", "no_history_with_advice", 1, 0, 0, 1),
+    ],
+)
+async def test_invalid_output_logs_only_sanitized_reason_and_counts(
+    lookback_case, caplog, monkeypatch, scenario, reason, tool_calls,
+    history_plans, findings, advice_items,
+):
+    case = lookback_case
+    output = valid_output(case)
+    monday = date(2026, 10, 12)
+    if scenario == "tool_not_called":
+        model = output_without_tool_model(output)
+    else:
+        if scenario == "week_mismatch":
+            output["previous_weeks"].reverse()
+        elif scenario == "unknown_task":
+            output["repeated_work"][0]["evidence"][0]["task_id"] = str(
+                case["plans"]["foreign"][1]
+            )
+        elif scenario == "completed_task":
+            task = await case["db"].get(PlanTask, case["plans"]["latest"][1])
+            assert task is not None
+            task.is_done = True
+            await case["db"].flush()
+        elif scenario == "single_plan_evidence":
+            output["repeated_work"][0]["evidence"][1] = dict(
+                output["repeated_work"][0]["evidence"][0]
+            )
+        elif scenario == "no_history_with_advice":
+            monday = date(2026, 9, 14)
+            output = {
+                "previous_weeks": [], "repeated_work": [],
+                "planning_adjustments": ["Start with one small milestone"],
+                "message": "No earlier plans are available yet.",
+            }
+        model = tool_model(output, [])
+
+    def forbid_google(*args, **kwargs):
+        raise AssertionError("Google must not be called by offline tests")
+
+    monkeypatch.setattr(ai, "GoogleModel", forbid_google)
+    with caplog.at_level("WARNING", logger=ai.logger.name):
+        with pytest.raises(APIException) as error:
+            await AIService(case["db"], case["org"], case["member"],
+                            model=model).look_back(monday)
+    await case["db"].commit()
+
+    assert error.value.status_code == 503
+    assert error.value.code == "AI_INVALID_OUTPUT"
+    assert error.value.message == "AI returned unusable advice. Try again later."
+    usage = await case["db"].scalar(select(AIUsage).where(
+        AIUsage.organization_id == case["org"]
+    ))
+    assert usage.feature == "look_back" and usage.outcome == "invalid_output"
+
+    events = [record.getMessage() for record in caplog.records
+              if record.name == ai.logger.name
+              and record.getMessage().startswith("look_back_validation_failure")]
+    assert events == [
+        "look_back_validation_failure feature=look_back "
+        f"reason={reason} tool_calls={tool_calls} history_plans={history_plans} "
+        f"findings={findings} advice_items={advice_items}"
+    ]
+    for private_value in (
+        str(case["org"]), str(case["member"]),
+        *(str(identifier) for pair in case["plans"].values() for identifier in pair),
+        "Deliver checkout", output["message"], "offline-test-key",
+    ):
+        assert private_value not in events[0]
+
+
+@pytest.mark.asyncio
+async def test_diagnostic_logging_failure_does_not_change_rejection(
+    lookback_case, monkeypatch,
+):
+    case = lookback_case
+
+    def broken_logger(*args, **kwargs):
+        raise RuntimeError("logging unavailable")
+
+    monkeypatch.setattr(ai.logger, "warning", broken_logger)
+    with pytest.raises(APIException) as error:
+        await AIService(case["db"], case["org"], case["member"],
+                        model=output_without_tool_model(valid_output(case))).look_back(
+                            date(2026, 10, 12)
+                        )
+    await case["db"].commit()
+    assert error.value.code == "AI_INVALID_OUTPUT"
+    assert error.value.message == "AI returned unusable advice. Try again later."
+    usage = await case["db"].scalar(select(AIUsage).where(
+        AIUsage.organization_id == case["org"]
+    ))
+    assert usage.outcome == "invalid_output"
 
 
 @pytest.mark.asyncio

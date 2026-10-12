@@ -1,7 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { generatePlan, reviewPlan } from "@/api/endpoints/ai/ai";
+import { useRef, useState } from "react";
+import {
+  generatePlan,
+  lookBackBeforePlanning,
+  reviewPlan,
+} from "@/api/endpoints/ai/ai";
 import {
   completeTask,
   finishPlan,
@@ -9,7 +13,7 @@ import {
   saveDraft,
   submitPlan,
 } from "@/api/endpoints/plans/plans";
-import type { PlanResponse, PlanReview } from "@/api/model";
+import type { LookbackAdvice, PlanResponse, PlanReview } from "@/api/model";
 import { useOrganization } from "@/contexts/organization-context";
 import { ApiError } from "@/lib/api-client";
 import { Button } from "@/components/ui/button";
@@ -53,6 +57,11 @@ function PlansPage() {
   const [plan, setPlan] = useState<PlanResponse | null>(null);
   const [notes, setNotes] = useState("");
   const [review, setReview] = useState<PlanReview | null>(null);
+  const [lookbackAdvice, setLookbackAdvice] =
+    useState<LookbackAdvice | null>(null);
+  const [lookbackError, setLookbackError] = useState("");
+  const lookbackVersion = useRef(0);
+  const currentScope = useRef("");
   const [message, setMessage] = useState("");
   const [loadedKey, setLoadedKey] = useState("");
   const plans = useQuery({
@@ -61,9 +70,12 @@ function PlansPage() {
     enabled: !!orgId,
   });
   const selected = plans.data?.find((p) => p.week_start === week);
+  const scopeKey = `${orgId}:${week}`;
+  currentScope.current = scopeKey;
 
   const selectedKey = `${orgId}:${week}:${selected?.id ?? "new"}:${selected?.status ?? ""}`;
   if (loadedKey !== selectedKey) {
+    lookbackVersion.current += 1;
     setLoadedKey(selectedKey);
     setPlan(selected ?? null);
     setTasks(
@@ -77,7 +89,15 @@ function PlansPage() {
         : emptyTasks()
     );
     setReview(null);
+    setLookbackAdvice(null);
+    setLookbackError("");
     setMessage("");
+  }
+
+  function clearLookback() {
+    lookbackVersion.current += 1;
+    setLookbackAdvice(null);
+    setLookbackError("");
   }
 
   const refresh = async (updated: PlanResponse) => {
@@ -128,6 +148,7 @@ function PlansPage() {
   const aiDraft = useMutation({
     mutationFn: () => generatePlan(orgId, { notes }),
     onSuccess: (result) => {
+      clearLookback();
       setTasks(
         result.tasks.map((t) => ({
           id: crypto.randomUUID(),
@@ -140,14 +161,49 @@ function PlansPage() {
       setMessage("Draft added to the form. Edit it before saving.");
     },
   });
+  const aiLookback = useMutation({
+    mutationFn: ({ organizationId, weekStart }: {
+      organizationId: string;
+      weekStart: string;
+      version: number;
+    }) => lookBackBeforePlanning(organizationId, weekStart),
+    onSuccess: (advice, request) => {
+      if (
+        currentScope.current === `${request.organizationId}:${request.weekStart}` &&
+        lookbackVersion.current === request.version
+      ) {
+        setLookbackAdvice(advice);
+      }
+    },
+    onError: (error, request) => {
+      if (
+        currentScope.current === `${request.organizationId}:${request.weekStart}` &&
+        lookbackVersion.current === request.version
+      ) {
+        setLookbackError(errorMessage(error));
+      }
+    },
+  });
+
+  function requestLookback() {
+    if (!orgId || aiLookback.isPending) return;
+    clearLookback();
+    aiLookback.mutate({
+      organizationId: orgId,
+      weekStart: week,
+      version: lookbackVersion.current,
+    });
+  }
 
   function updateTask(id: string, changes: Partial<DraftTask>) {
+    clearLookback();
     setTasks((current) =>
       current.map((task) => (task.id === id ? { ...task, ...changes } : task))
     );
     setReview(null);
   }
   function addTask(kind: DraftTask["kind"]) {
+    clearLookback();
     setTasks((current) => [
       ...current,
       { id: crypto.randomUUID(), kind, text: "", why_it_matters: "" },
@@ -186,7 +242,10 @@ function PlansPage() {
             className="mt-1"
             type="date"
             value={week}
-            onChange={(e) => setWeek(e.target.value)}
+            onChange={(e) => {
+              clearLookback();
+              setWeek(e.target.value);
+            }}
           />
         </label>
       </div>
@@ -199,6 +258,103 @@ function PlansPage() {
       )}
       {organization && (
         <>
+          <section className="rounded-xl border bg-white p-5">
+            <h2 className="text-lg font-semibold">Look back before planning</h2>
+            <p className="mt-1 text-sm text-muted-foreground">
+              Review your previous two weeks for unfinished work and get ideas
+              for a realistic plan. Suggestions stay here until you choose what
+              to do.
+            </p>
+            <Button
+              variant="outline"
+              className="mt-4 cursor-pointer"
+              disabled={
+                aiLookback.isPending ||
+                busy ||
+                plans.isLoading ||
+                !week ||
+                new Date(`${week}T12:00:00`).getDay() !== 1
+              }
+              onClick={requestLookback}
+            >
+              {aiLookback.isPending ? "Looking back…" : "Look back with AI"}
+            </Button>
+            {lookbackError && (
+              <p className="mt-3 text-sm text-red-700" role="alert">
+                {lookbackError} You can keep planning manually.
+              </p>
+            )}
+            {lookbackAdvice && (
+              <div className="mt-4 space-y-4 text-sm" aria-live="polite">
+                {lookbackAdvice.previous_weeks.length === 0 ? (
+                  <p className="rounded-lg bg-[#F7F9FC] p-3">
+                    No previous plans yet. {lookbackAdvice.message}
+                  </p>
+                ) : (
+                  <>
+                    <p>{lookbackAdvice.message}</p>
+                    <div>
+                      <h3 className="font-semibold">Previous weeks reviewed</h3>
+                      <ul className="mt-1 list-inside list-disc">
+                        {lookbackAdvice.previous_weeks.map((previousWeek) => (
+                          <li key={previousWeek}>{previousWeek}</li>
+                        ))}
+                      </ul>
+                    </div>
+                    {lookbackAdvice.repeated_work.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold">Repeated unfinished work</h3>
+                        <ul className="mt-2 space-y-3">
+                          {lookbackAdvice.repeated_work.map((item, index) => (
+                            <li
+                              key={index}
+                              className="rounded-lg bg-[#F7F9FC] p-3"
+                            >
+                              <p className="font-medium">{item.description}</p>
+                              <ul className="mt-2 list-inside list-disc text-muted-foreground">
+                                {item.evidence.map((reference) => {
+                                  const previousPlan = plans.data?.find(
+                                    (candidate) => candidate.id === reference.plan_id
+                                  );
+                                  const previousTask = previousPlan?.tasks.find(
+                                    (candidate) => candidate.id === reference.task_id
+                                  );
+                                  return (
+                                    <li key={`${reference.plan_id}:${reference.task_id}`}>
+                                      {previousPlan?.week_start ?? "Previous plan"}: {" "}
+                                      {previousTask?.text ?? "Unfinished task"}
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                              <p className="mt-2">
+                                <strong>Try:</strong> {item.suggested_adjustment}
+                              </p>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                    {lookbackAdvice.repeated_work.length === 0 && (
+                      <p>No repeated unfinished work was identified.</p>
+                    )}
+                    {lookbackAdvice.planning_adjustments.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold">Planning adjustments</h3>
+                        <ul className="mt-1 list-inside list-disc">
+                          {lookbackAdvice.planning_adjustments.map(
+                            (adjustment, index) => (
+                              <li key={index}>{adjustment}</li>
+                            )
+                          )}
+                        </ul>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            )}
+          </section>
           <div className="rounded-xl border bg-white p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Plan for {week}</h2>
@@ -221,9 +377,10 @@ function PlansPage() {
                       <button
                         type="button"
                         className="cursor-pointer text-sm text-red-700"
-                        onClick={() =>
-                          setTasks((all) => all.filter((t) => t.id !== task.id))
-                        }
+                        onClick={() => {
+                          clearLookback();
+                          setTasks((all) => all.filter((t) => t.id !== task.id));
+                        }}
                       >
                         Remove
                       </button>
@@ -293,6 +450,7 @@ function PlansPage() {
                           variant="outline"
                           className="mt-2 cursor-pointer"
                           onClick={() => {
+                            clearLookback();
                             setTasks((current) =>
                               current.map((item) =>
                                 item.id === task.id

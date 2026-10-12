@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.exceptions import APIException, ValidationException
+from app.logging import logger
 from app.models import AIUsage, PlanTask, WeeklyPlan
 
 MODEL = "gemini-3.5-flash-lite"
@@ -107,11 +108,13 @@ class LookbackDeps:
     membership_id: uuid.UUID
     selected_monday: date
     history: list[HistoricalPlan] | None = None
+    tool_calls: int = 0
 
 
 async def previous_two_plans(ctx: RunContext[LookbackDeps]) -> list[HistoricalPlan]:
     """Retrieve the authorized member's two most recent plans before this week."""
     deps = ctx.deps
+    deps.tool_calls += 1
     plans = (await deps.session.scalars(
         select(WeeklyPlan).where(
             WeeklyPlan.organization_id == deps.organization_id,
@@ -134,6 +137,22 @@ async def previous_two_plans(ctx: RunContext[LookbackDeps]) -> list[HistoricalPl
         ))
     deps.history = history
     return history
+
+
+def log_lookback_invalid_output(
+    reason: str, deps: LookbackDeps, result: LookbackAdvice,
+) -> None:
+    """Log only fixed classification and counts; logging must not affect the request."""
+    try:
+        logger.warning(
+            "look_back_validation_failure feature=look_back reason=%s "
+            "tool_calls=%d history_plans=%d findings=%d advice_items=%d",
+            reason, deps.tool_calls, len(deps.history or []),
+            len(result.repeated_work), len(result.planning_adjustments),
+        )
+    except Exception:
+        # A logging failure must not change the existing validation response.
+        pass
 
 
 REVIEW_INSTRUCTIONS = """Review a one-week engineering plan as a demanding, constructive team lead.
@@ -284,7 +303,12 @@ class AIService:
             deps=deps, tool=previous_two_plans,
         )
         history = deps.history
-        if history is None or result.previous_weeks != [plan.week_start for plan in history]:
+        if history is None:
+            log_lookback_invalid_output("tool_not_called", deps, result)
+            await self._invalid_output()
+            raise APIException(503, "AI_INVALID_OUTPUT", "AI returned unusable advice. Try again later.")
+        if result.previous_weeks != [plan.week_start for plan in history]:
+            log_lookback_invalid_output("week_mismatch", deps, result)
             await self._invalid_output()
             raise APIException(503, "AI_INVALID_OUTPUT", "AI returned unusable advice. Try again later.")
         plans = {plan.id: plan for plan in history}
@@ -295,13 +319,16 @@ class AIService:
                 if plan is None or not any(
                     task.id == reference.task_id and not task.is_done for task in plan.tasks
                 ):
+                    log_lookback_invalid_output("unknown_or_completed_task", deps, result)
                     await self._invalid_output()
                     raise APIException(503, "AI_INVALID_OUTPUT", "AI returned unusable advice. Try again later.")
                 cited_plans.add(plan.id)
             if len(cited_plans) < 2:
+                log_lookback_invalid_output("single_plan_evidence", deps, result)
                 await self._invalid_output()
                 raise APIException(503, "AI_INVALID_OUTPUT", "AI returned unusable advice. Try again later.")
         if not history and (result.repeated_work or result.planning_adjustments):
+            log_lookback_invalid_output("no_history_with_advice", deps, result)
             await self._invalid_output()
             raise APIException(503, "AI_INVALID_OUTPUT", "AI returned unusable advice. Try again later.")
         return result
