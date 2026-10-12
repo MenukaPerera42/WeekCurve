@@ -1,6 +1,8 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { teamDigest } from "@/api/endpoints/ai/ai";
+import type { TeamDigest } from "@/api/model";
 import {
   listTeams,
   createTeam,
@@ -17,6 +19,7 @@ import {
   sendBackPlan,
 } from "@/api/endpoints/plans/plans";
 import { useOrganization } from "@/contexts/organization-context";
+import { useCurrentUser } from "@/contexts/user-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ApiError } from "@/lib/api-client";
@@ -31,6 +34,7 @@ function monday() {
 
 function TeamsPage() {
   const { organization } = useOrganization();
+  const user = useCurrentUser();
   const orgId = organization?.id ?? "";
   const isAdmin =
     organization?.role === "owner" || organization?.role === "admin";
@@ -41,6 +45,16 @@ function TeamsPage() {
   const [addMemberId, setAddMemberId] = useState("");
   const [selectedPlanId, setSelectedPlanId] = useState("");
   const [feedback, setFeedback] = useState("");
+  const [digestResult, setDigestResult] = useState<{
+    scope: string;
+    data: TeamDigest;
+  } | null>(null);
+  const [digestError, setDigestError] = useState<{
+    scope: string;
+    message: string;
+  } | null>(null);
+  const digestVersion = useRef(0);
+  const currentDigestScope = useRef("");
   const teams = useQuery({
     queryKey: ["teams", orgId],
     queryFn: () => listTeams(orgId),
@@ -70,7 +84,86 @@ function TeamsPage() {
     queryFn: () => getPlan(orgId, selectedPlanId),
     enabled: !!selectedPlanId,
   });
+  const digestScope = JSON.stringify([
+    orgId,
+    activeTeamId,
+    week,
+    members.dataUpdatedAt,
+    weekView.dataUpdatedAt,
+  ]);
+  if (currentDigestScope.current !== digestScope) {
+    currentDigestScope.current = digestScope;
+    digestVersion.current += 1;
+  }
+  useEffect(() => {
+    setDigestResult(null);
+    setDigestError(null);
+  }, [digestScope]);
+  const isTeamLead = !!user && members.data?.some(
+    (member) => member.user_id === user.id && member.is_lead
+  );
+  const isMonday = /^\d{4}-\d{2}-\d{2}$/.test(week) &&
+    new Date(`${week}T00:00:00`).getDay() === 1;
+  const visibleDigest = digestResult?.scope === digestScope
+    ? digestResult.data : null;
+  const clearDigest = () => {
+    digestVersion.current += 1;
+    setDigestResult(null);
+    setDigestError(null);
+  };
+  const digest = useMutation({
+    mutationFn: ({ organizationId, selectedTeamId, weekStart }: {
+      organizationId: string;
+      selectedTeamId: string;
+      weekStart: string;
+      scope: string;
+      version: number;
+    }) => teamDigest(organizationId, selectedTeamId, weekStart),
+    onSuccess: (data, request) => {
+      if (currentDigestScope.current === request.scope &&
+          digestVersion.current === request.version) {
+        setDigestResult({ scope: request.scope, data });
+      }
+    },
+    onError: (error, request) => {
+      if (currentDigestScope.current !== request.scope ||
+          digestVersion.current !== request.version) return;
+      if (error instanceof ApiError) {
+        if ([401, 403, 404].includes(error.status)) {
+          setDigestError({ scope: request.scope,
+            message: "You do not have access to this team's digest. Refresh your team selection." });
+        } else if (error.status === 429) {
+          setDigestError({ scope: request.scope,
+            message: "AI is busy right now. Try again later." });
+        } else if (error.status === 503) {
+          const detail = error.data as { detail?: { msg?: string }[] } | undefined;
+          setDigestError({ scope: request.scope,
+            message: detail?.detail?.[0]?.msg ?? "AI is unavailable. Try again later." });
+        } else {
+          setDigestError({ scope: request.scope,
+            message: "Could not generate the digest. Try again." });
+        }
+      } else {
+        setDigestError({ scope: request.scope,
+          message: "Network error. Check your connection and try again." });
+      }
+    },
+  });
+  const digestPending = digest.isPending && digest.variables?.scope === digestScope;
+  const requestDigest = () => {
+    if (!orgId || !activeTeamId || !isTeamLead || !isMonday ||
+        !members.isSuccess || !weekView.isSuccess || digestPending) return;
+    clearDigest();
+    digest.mutate({
+      organizationId: orgId,
+      selectedTeamId: activeTeamId,
+      weekStart: week,
+      scope: digestScope,
+      version: digestVersion.current,
+    });
+  };
   const refresh = () => {
+    clearDigest();
     queryClient.invalidateQueries({ queryKey: ["teams", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-members", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-week", orgId] });
@@ -339,6 +432,139 @@ function TeamsPage() {
               )}
             </section>
           )}
+          <section className="rounded-xl border bg-white p-5">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="font-semibold">AI Team Digest</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Generate a read-only summary of the team&apos;s selected week.
+                </p>
+                {selectedTeam && (
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {selectedTeam.name} · Week starting {week}
+                  </p>
+                )}
+              </div>
+              {activeTeamId && isTeamLead && (
+                <Button
+                  type="button"
+                  className="cursor-pointer"
+                  disabled={!isMonday || !members.isSuccess ||
+                    !weekView.isSuccess || digestPending}
+                  onClick={requestDigest}
+                >
+                  {digestPending ? "Generating…" : "Generate Team Digest"}
+                </Button>
+              )}
+            </div>
+            {!activeTeamId && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Select a team to generate its digest.
+              </p>
+            )}
+            {activeTeamId && members.isSuccess && !isTeamLead && (
+              <p className="mt-3 text-sm text-muted-foreground">
+                Only this team&apos;s lead can generate its digest.
+              </p>
+            )}
+            {activeTeamId && isTeamLead && !isMonday && (
+              <p className="mt-3 text-sm text-red-700">
+                Select a Monday as the week starting date.
+              </p>
+            )}
+            {activeTeamId && isTeamLead && weekView.isError && (
+              <p className="mt-3 text-sm text-red-700">
+                The team week could not be loaded. Refresh it before generating a digest.
+              </p>
+            )}
+            {digestPending && (
+              <p className="mt-3 text-sm text-muted-foreground" role="status">
+                Gemini is preparing the team digest…
+              </p>
+            )}
+            {digestError?.scope === digestScope && (
+              <p role="alert" className="mt-3 text-sm text-red-700">
+                {digestError.message}
+              </p>
+            )}
+            {visibleDigest && (
+              <div className="mt-4 space-y-4 text-sm" aria-live="polite">
+                <div className="grid gap-3 rounded-lg bg-[#F7F9FC] p-4 sm:grid-cols-2 lg:grid-cols-4">
+                  <p><strong>{visibleDigest.member_count}</strong> team members</p>
+                  <p><strong>{visibleDigest.submitted_count}</strong> submitted plans</p>
+                  <p><strong>{visibleDigest.missing_submissions.length}</strong> missing submissions</p>
+                  <p><strong>{visibleDigest.done_count}</strong> completed plans</p>
+                </div>
+                {visibleDigest.submitted_count === 0 && (
+                  <p className="rounded-lg border p-3 text-muted-foreground">
+                    No team plans have been submitted for this week yet.
+                  </p>
+                )}
+                <div>
+                  <h3 className="font-medium">Progress</h3>
+                  <p className="mt-1 whitespace-pre-wrap">{visibleDigest.progress_summary}</p>
+                  <p className="mt-2 text-muted-foreground">
+                    {visibleDigest.awaiting_approval_count} awaiting approval ·{" "}
+                    {visibleDigest.approved_count} approved ·{" "}
+                    {visibleDigest.draft_count} drafts ·{" "}
+                    {visibleDigest.not_started_count} not started
+                  </p>
+                </div>
+                <div>
+                  <h3 className="font-medium">Missing submissions</h3>
+                  {visibleDigest.missing_submissions.length ? (
+                    <ul className="mt-2 list-inside list-disc space-y-1">
+                      {visibleDigest.missing_submissions.map((member) => (
+                        <li key={member.member_id}>
+                          {member.name} · {member.status === "draft" ? "Draft" : "Not started"}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="mt-1 text-muted-foreground">Everyone has submitted a plan.</p>}
+                </div>
+                <div>
+                  <h3 className="font-medium">Incomplete or unshipped work</h3>
+                  {visibleDigest.incomplete_work.length ? (
+                    <ul className="mt-2 space-y-2">
+                      {visibleDigest.incomplete_work.map((item) => (
+                        <li key={item.evidence_id} className="rounded-lg border p-3">
+                          <strong>{visibleDigest.members.find(
+                            (member) => member.member_id === item.member_id
+                          )?.name}</strong>{" "}
+                          · {item.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="mt-1 text-muted-foreground">No incomplete or unshipped work is recorded.</p>}
+                </div>
+                <div>
+                  <h3 className="font-medium">Delivery risks</h3>
+                  {visibleDigest.delivery_risks.length ? (
+                    <ul className="mt-2 space-y-2">
+                      {visibleDigest.delivery_risks.map((risk) => (
+                        <li key={risk.evidence_id} className="rounded-lg border p-3">
+                          <strong>{visibleDigest.members.find(
+                            (member) => member.member_id === risk.member_id
+                          )?.name}</strong>{" "}
+                          · {risk.detail}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="mt-1 text-muted-foreground">No evidence-based risks selected.</p>}
+                </div>
+                <div>
+                  <h3 className="font-medium">Recommended next actions</h3>
+                  {visibleDigest.recommended_actions.length ? (
+                    <ul className="mt-2 list-inside list-disc space-y-1">
+                      {visibleDigest.recommended_actions.map((action, index) => (
+                        <li key={`${index}-${action}`}>{action}</li>
+                      ))}
+                    </ul>
+                  ) : <p className="mt-1 text-muted-foreground">No additional actions suggested.</p>}
+                </div>
+              </div>
+            )}
+          </section>
           {detail.data && (
             <section className="rounded-xl border bg-white p-5">
               <h2 className="font-semibold">
