@@ -6,14 +6,17 @@
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/geist-mono";
 
+/* Poppins primary font with full Latin weights */
+@import url("https://fonts.googleapis.com/css2?family=Poppins:ital,wght@0,300;0,400;0,500;0,600;0,700;1,400;1,500;1,600;1,700&display=swap");
+
 @custom-variant dark (&:is(.dark, .dark *));
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
+  --font-sans: var(--font-poppins);
   --font-mono: var(--font-geist-mono);
-  --font-heading: var(--font-geist-sans);
+  --font-heading: var(--font-poppins);
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -58,6 +61,7 @@
 }
 
 :root {
+  --font-poppins: "Poppins", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-geist-sans: "Geist Variable", ui-sans-serif, system-ui, sans-serif;
   --font-geist-mono: "Geist Mono Variable", ui-monospace, monospace;
   --background: #F7F9FC;
@@ -142,10 +146,12 @@
   * {
     @apply border-border outline-ring/50;
   }
-  body {
-    @apply bg-background text-foreground;
-  }
   html {
     @apply font-sans;
+    font-family: var(--font-poppins);
+  }
+  body {
+    @apply bg-background text-foreground font-sans;
+    font-family: var(--font-poppins);
   }
 }
