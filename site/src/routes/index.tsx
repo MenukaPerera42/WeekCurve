@@ -182,10 +182,10 @@ function HomePage() {
             <div className="relative left-[calc(50%-11rem)] aspect-1155/678 w-[36.125rem] -translate-x-1/2 rotate-[30deg] bg-linear-to-tr from-blue-600/15 to-indigo-600/10 opacity-60 sm:left-[calc(50%-20rem)] sm:w-[72.1875rem]" />
           </div>
 
-          <div className="mx-auto max-w-6xl px-4 text-center sm:px-6 lg:px-8">
-            {/* Pill Badge */}
-            <div className="inline-flex items-center gap-2 rounded-full border border-border bg-card/80 px-3.5 py-1 text-xs font-semibold text-foreground shadow-2xs backdrop-blur-xs">
-              <Sparkles className="size-3.5 text-primary" />
+          <div className="mx-auto max-w-7xl px-4 text-center sm:px-6 lg:px-8">
+            {/* Expressive Supporting Hero Label */}
+            <div className="inline-flex items-center gap-2 text-sm font-medium italic tracking-wide text-muted-foreground sm:text-base">
+              <Sparkles className="size-3.5 sm:size-4 text-primary shrink-0 not-italic" />
               <span>AI-Assisted Weekly Planning for Software Teams</span>
             </div>
 
@@ -200,10 +200,6 @@ function HomePage() {
             {/* Supporting Copy */}
             <p className="mx-auto mt-6 max-w-2xl text-base leading-relaxed text-muted-foreground sm:text-lg">
               Weekly planning for software teams that want clear goals, useful approvals, and a Friday finish.
-            </p>
-
-            <p className="mx-auto mt-2 max-w-xl text-xs sm:text-sm text-muted-foreground/80">
-              One shippable outcome per engineer on Monday. Instant AI plan feedback. Clear team lead approval. Friday ends on a high note without carrying unfinished work into next week.
             </p>
 
             {/* Call To Actions */}
@@ -234,7 +230,7 @@ function HomePage() {
                 3. PRODUCT VISUAL PREVIEW
                 ───────────────────────────────────────────────────────────────────────── */}
             <div id="preview" className="mt-12 sm:mt-16 scroll-mt-24">
-              <div className="relative mx-auto max-w-5xl rounded-2xl border border-border bg-card p-3 shadow-xl sm:p-5">
+              <div className="relative mx-auto max-w-6xl rounded-2xl border border-border bg-card p-3 shadow-xl sm:p-5">
                 {/* Mock Window Top Bar */}
                 <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-border/80 pb-3">
                   <div className="flex items-center gap-2">
