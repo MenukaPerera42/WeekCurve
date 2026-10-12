@@ -510,7 +510,8 @@ function PlansPage() {
                     <div className="flex items-start gap-3">
                       <input
                         type="checkbox"
-                        className="mt-1 cursor-pointer"
+                        id={`task-${task.id}`}
+                        className="mt-1 size-4 rounded border-border text-primary cursor-pointer accent-primary shrink-0"
                         disabled={plan?.status !== "approved" || busy}
                         checked={
                           plan?.tasks.find((t) => t.id === task.id)?.is_done ??
@@ -520,10 +521,19 @@ function PlansPage() {
                           toggle.mutate({ id: task.id, done: e.target.checked })
                         }
                       />
-                      <div>
-                        <p>{task.text}</p>
+                      <div className="flex-1 min-w-0">
+                        <label
+                          htmlFor={`task-${task.id}`}
+                          className={`cursor-pointer ${
+                            plan?.tasks.find((t) => t.id === task.id)?.is_done
+                              ? "line-through text-muted-foreground"
+                              : "text-foreground"
+                          }`}
+                        >
+                          {task.text}
+                        </label>
                         {task.why_it_matters && (
-                          <p className="text-sm text-muted-foreground">
+                          <p className="text-sm text-muted-foreground mt-0.5">
                             Why: {task.why_it_matters}
                           </p>
                         )}
@@ -574,6 +584,11 @@ function PlansPage() {
                 </div>
               ))}
             </div>
+            {plan?.status === "submitted" && (
+              <p className="mt-4 text-xs text-muted-foreground bg-muted/40 p-3 rounded-lg border border-border/50">
+                Your plan is currently submitted for review. Tasks can be ticked and marked complete once your team lead approves the plan.
+              </p>
+            )}
             {editable && (
               <div className="mt-4 flex flex-wrap gap-2">
                 <Button
