@@ -1,4 +1,5 @@
 import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
 import appCss from "@/styles.css?url";
 
 // Document shell for every page. `head` replaces the Next.js `metadata`
@@ -26,12 +27,15 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body className="antialiased">
-        {children}
+        <ThemeProvider>
+          {children}
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

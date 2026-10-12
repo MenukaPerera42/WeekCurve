@@ -224,7 +224,7 @@ function TeamsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-[#111C30]">Teams</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Teams</h1>
         <p className="text-muted-foreground">
           See the week, review plans, and keep everyone moving.
         </p>
@@ -233,7 +233,7 @@ function TeamsPage() {
       {organization && (
         <>
           {isAdmin && (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="font-semibold">Create a team</h2>
               <form
                 className="mt-3 flex gap-2"
@@ -261,7 +261,7 @@ function TeamsPage() {
                 </Button>
               </form>
               {create.isError && (
-                <p role="alert" className="mt-2 text-sm text-red-700">
+                <p role="alert" className="mt-2 text-sm text-destructive">
                   {create.error instanceof ApiError
                     ? (create.error.data as { detail?: { msg?: string }[] } | undefined)
                         ?.detail?.[0]?.msg ?? "Could not create the team. Please try again."
@@ -270,12 +270,12 @@ function TeamsPage() {
               )}
             </section>
           )}
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-semibold">Team</h2>
               <select
                 aria-label="Select team"
-                className="rounded-md border bg-white px-3 py-2 cursor-pointer"
+                className="rounded-md border border-input bg-background text-foreground px-3 py-2 cursor-pointer"
                 value={activeTeamId}
                 onChange={(e) => {
                   setTeamId(e.target.value);
@@ -303,7 +303,7 @@ function TeamsPage() {
                   {members.data?.map((m) => (
                     <li
                       key={m.member_id}
-                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border px-3 py-2 text-sm"
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-card text-card-foreground px-3 py-2 text-sm"
                     >
                       <span>
                         {m.name} {m.is_lead && <strong>· Lead</strong>}{" "}
@@ -340,7 +340,7 @@ function TeamsPage() {
                   <div className="mt-3 flex gap-2">
                     <select
                       aria-label="Add member"
-                      className="flex-1 rounded-md border bg-white px-3 cursor-pointer"
+                      className="flex-1 rounded-md border border-input bg-background text-foreground px-3 py-2 cursor-pointer"
                       value={addMemberId}
                       onChange={(e) => setAddMemberId(e.target.value)}
                     >
@@ -369,7 +369,7 @@ function TeamsPage() {
             )}
           </section>
           {activeTeamId && (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <div className="flex flex-wrap items-end justify-between gap-3">
                 <div>
                   <h2 className="font-semibold">The team’s week</h2>
@@ -389,7 +389,7 @@ function TeamsPage() {
               {weekView.isLoading && <p className="mt-4">Loading the week…</p>}
               {weekView.error instanceof ApiError &&
                 weekView.error.status === 404 && (
-                  <p className="mt-4 rounded-lg border p-4">
+                  <p className="mt-4 rounded-lg border border-border text-muted-foreground p-4">
                     Only this team’s lead can view and approve its weekly plans.
                   </p>
                 )}
@@ -398,7 +398,7 @@ function TeamsPage() {
                   weekView.error instanceof ApiError &&
                   weekView.error.status === 404
                 ) && (
-                  <p className="mt-4 text-red-700">Could not load the week.</p>
+                  <p className="mt-4 text-destructive">Could not load the week.</p>
                 )}
               <div className="mt-4 grid gap-3 sm:grid-cols-2">
                 {weekView.data?.map((item) => (
@@ -406,7 +406,7 @@ function TeamsPage() {
                     type="button"
                     key={item.member_id}
                     disabled={!item.plan_id}
-                    className="rounded-lg border p-4 text-left transition hover:border-[#243A59] disabled:opacity-60 cursor-pointer"
+                    className="rounded-lg border border-border bg-card/60 text-card-foreground p-4 text-left transition hover:border-primary/50 disabled:opacity-60 cursor-pointer"
                     onClick={() => setSelectedPlanId(item.plan_id ?? "")}
                   >
                     <strong>{item.member_name}</strong>
@@ -432,7 +432,7 @@ function TeamsPage() {
               )}
             </section>
           )}
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <h2 className="font-semibold">AI Team Digest</h2>
@@ -468,12 +468,12 @@ function TeamsPage() {
               </p>
             )}
             {activeTeamId && isTeamLead && !isMonday && (
-              <p className="mt-3 text-sm text-red-700">
+              <p className="mt-3 text-sm text-destructive">
                 Select a Monday as the week starting date.
               </p>
             )}
             {activeTeamId && isTeamLead && weekView.isError && (
-              <p className="mt-3 text-sm text-red-700">
+              <p className="mt-3 text-sm text-destructive">
                 The team week could not be loaded. Refresh it before generating a digest.
               </p>
             )}
@@ -483,20 +483,20 @@ function TeamsPage() {
               </p>
             )}
             {digestError?.scope === digestScope && (
-              <p role="alert" className="mt-3 text-sm text-red-700">
+              <p role="alert" className="mt-3 text-sm text-destructive">
                 {digestError.message}
               </p>
             )}
             {visibleDigest && (
               <div className="mt-4 space-y-4 text-sm" aria-live="polite">
-                <div className="grid gap-3 rounded-lg bg-[#F7F9FC] p-4 sm:grid-cols-2 lg:grid-cols-4">
+                <div className="grid gap-3 rounded-lg border border-border bg-muted/50 text-foreground p-4 sm:grid-cols-2 lg:grid-cols-4">
                   <p><strong>{visibleDigest.member_count}</strong> team members</p>
                   <p><strong>{visibleDigest.submitted_count}</strong> submitted plans</p>
                   <p><strong>{visibleDigest.missing_submissions.length}</strong> missing submissions</p>
                   <p><strong>{visibleDigest.done_count}</strong> completed plans</p>
                 </div>
                 {visibleDigest.submitted_count === 0 && (
-                  <p className="rounded-lg border p-3 text-muted-foreground">
+                  <p className="rounded-lg border border-border p-3 text-muted-foreground">
                     No team plans have been submitted for this week yet.
                   </p>
                 )}
@@ -527,7 +527,7 @@ function TeamsPage() {
                   {visibleDigest.incomplete_work.length ? (
                     <ul className="mt-2 space-y-2">
                       {visibleDigest.incomplete_work.map((item) => (
-                        <li key={item.evidence_id} className="rounded-lg border p-3">
+                        <li key={item.evidence_id} className="rounded-lg border border-border p-3">
                           <strong>{visibleDigest.members.find(
                             (member) => member.member_id === item.member_id
                           )?.name}</strong>{" "}
@@ -542,7 +542,7 @@ function TeamsPage() {
                   {visibleDigest.delivery_risks.length ? (
                     <ul className="mt-2 space-y-2">
                       {visibleDigest.delivery_risks.map((risk) => (
-                        <li key={risk.evidence_id} className="rounded-lg border p-3">
+                        <li key={risk.evidence_id} className="rounded-lg border border-border p-3">
                           <strong>{visibleDigest.members.find(
                             (member) => member.member_id === risk.member_id
                           )?.name}</strong>{" "}
@@ -566,7 +566,7 @@ function TeamsPage() {
             )}
           </section>
           {detail.data && (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="font-semibold">
                 Plan review · {detail.data.week_start}
               </h2>
@@ -575,7 +575,7 @@ function TeamsPage() {
               </p>
               <ul className="mt-4 space-y-2">
                 {detail.data.tasks.map((task) => (
-                  <li key={task.id} className="rounded-lg border p-3 text-sm">
+                  <li key={task.id} className="rounded-lg border border-border p-3 text-sm">
                     <strong className="capitalize">
                       {task.kind.replaceAll("_", " ")}
                     </strong>
@@ -619,7 +619,7 @@ function TeamsPage() {
             </section>
           )}
           {error && (
-            <p className="text-sm text-red-700">
+            <p className="text-sm text-destructive">
               {error instanceof ApiError
                 ? "The request was refused. Check your role and the selected member."
                 : "Network error. Try again."}

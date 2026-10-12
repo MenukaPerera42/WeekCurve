@@ -2,6 +2,7 @@ import { HeadContent, Scripts, createRootRoute } from "@tanstack/react-router";
 import { QueryProvider } from "@/components/QueryProvider";
 import { UserProvider } from "@/contexts/user-context";
 import { Toaster } from "@/components/ui/sonner";
+import { ThemeProvider, THEME_INIT_SCRIPT } from "@/components/ThemeToggle";
 import appCss from "@/styles.css?url";
 
 // Document shell for the whole app. In SPA mode this is what gets prerendered
@@ -28,17 +29,20 @@ export const Route = createRootRoute({
 
 function RootDocument({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="en" suppressHydrationWarning>
       <head>
+        <script dangerouslySetInnerHTML={{ __html: THEME_INIT_SCRIPT }} />
         <HeadContent />
       </head>
       <body className="antialiased">
-        <QueryProvider>
-          <UserProvider>
-            {children}
-            <Toaster />
-          </UserProvider>
-        </QueryProvider>
+        <ThemeProvider>
+          <QueryProvider>
+            <UserProvider>
+              {children}
+              <Toaster />
+            </UserProvider>
+          </QueryProvider>
+        </ThemeProvider>
         <Scripts />
       </body>
     </html>

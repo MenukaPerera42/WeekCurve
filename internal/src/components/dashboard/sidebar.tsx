@@ -45,6 +45,7 @@ export function Sidebar() {
 
   return (
     <aside className="hidden h-screen w-64 shrink-0 flex-col border-r bg-background md:flex">
+    <aside className="hidden h-screen w-64 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
       <div className="flex h-16 items-center px-6">
         <Link to="/dashboard" aria-label="WeekCurve internal">
           <Logo className="h-7" />
@@ -63,6 +64,7 @@ export function Sidebar() {
               to={href}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors",
+                "flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors cursor-pointer",
                 active
                   ? "bg-muted text-foreground"
                   : "text-muted-foreground hover:bg-muted/60 hover:text-foreground"
@@ -76,13 +78,17 @@ export function Sidebar() {
       </nav>
 
       <div className="border-t p-3">
+      <div className="border-t border-border p-3 space-y-3">
         {user && (
           <div className="flex items-center gap-3 rounded-md px-2 py-2">
             <span className="flex size-9 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold">
+          <div className="flex items-center gap-3 rounded-md px-2 py-1.5 bg-muted/40">
+            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-muted text-xs font-semibold text-foreground">
               {initials}
             </span>
             <div className="min-w-0">
               <p className="truncate text-sm font-medium">
+              <p className="truncate text-sm font-medium text-foreground">
                 {user.first_name} {user.last_name}
               </p>
               <p className="truncate text-xs text-muted-foreground">
@@ -94,6 +100,7 @@ export function Sidebar() {
         <Button
           variant="ghost"
           className="mt-1 w-full justify-start text-muted-foreground hover:text-foreground"
+          className="w-full justify-start text-muted-foreground hover:text-foreground cursor-pointer"
           disabled={logoutMutation.isPending}
           onClick={() => logoutMutation.mutate()}
         >
@@ -111,17 +118,28 @@ export function MobileNav() {
   const signOut = useMutation({ mutationFn: () => logout(), onSettled: () => { queryClient.clear(); navigate({ to: "/login" }); } });
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 gap-1 border-t bg-background p-2 shadow-lg md:hidden">
+    <nav className="fixed inset-x-0 bottom-0 z-50 grid grid-cols-5 gap-1 border-t border-border bg-card text-card-foreground p-2 shadow-lg md:hidden">
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
         <Link
           key={href}
           to={href}
           className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground hover:bg-muted"
+          className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
         >
           <Icon className="mb-1 size-4" />
           {label}
         </Link>
       ))}
       <button type="button" className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground" disabled={signOut.isPending} onClick={() => signOut.mutate()}><LogOut className="mb-1 size-4" />Sign out</button>
+      <button
+        type="button"
+        className="flex cursor-pointer flex-col items-center rounded-md px-1 py-2 text-[11px] text-muted-foreground hover:bg-muted hover:text-foreground"
+        disabled={signOut.isPending}
+        onClick={() => signOut.mutate()}
+      >
+        <LogOut className="mb-1 size-4" />
+        Sign out
+      </button>
     </nav>
   );
 }

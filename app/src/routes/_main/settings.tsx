@@ -76,7 +76,7 @@ function SettingsPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-[#111C30]">Organization</h1>
+        <h1 className="text-3xl font-semibold text-foreground">Organization</h1>
         <p className="text-muted-foreground">
           Members, invitations, and workspace settings.
         </p>
@@ -84,7 +84,7 @@ function SettingsPage() {
       {!organization && <p>No active organization selected.</p>}
       {organization && (
         <>
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <h2 className="text-lg font-semibold">{organization.name}</h2>
             <p className="text-sm text-muted-foreground">
               Your role: {organization.role}
@@ -114,9 +114,9 @@ function SettingsPage() {
               </form>
             )}
           </section>
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <h2 className="text-lg font-semibold">Members</h2>
-            <div className="mt-3 divide-y">
+            <div className="mt-3 divide-y divide-border">
               {members.isLoading && <p>Loading members…</p>}
               {members.data?.map((member) => (
                 <div
@@ -181,7 +181,7 @@ function SettingsPage() {
             </div>
           </section>
           {isAdmin && (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="text-lg font-semibold">Invite a teammate</h2>
               <p className="mt-1 text-sm text-muted-foreground">
                 Create a private link for one email address. It expires after
@@ -210,7 +210,7 @@ function SettingsPage() {
                 />
                 <select
                   aria-label="Invitation role"
-                  className="rounded-md border bg-white px-3 cursor-pointer"
+                  className="rounded-md border border-input bg-background text-foreground px-3 py-2 cursor-pointer"
                   value={inviteRole}
                   onChange={(e) => {
                     setInviteRole(e.target.value);
@@ -231,7 +231,7 @@ function SettingsPage() {
                 </Button>
               </form>
               {invite.isError && (
-                <p role="alert" className="mt-2 text-sm text-red-700">
+                <p role="alert" className="mt-2 text-sm text-destructive">
                   {invite.error instanceof ApiError
                     ? (invite.error.data as { detail?: { msg?: string }[] } | undefined)
                         ?.detail?.[0]?.msg ?? "Could not create the invitation. Please try again."
@@ -239,7 +239,7 @@ function SettingsPage() {
                 </p>
               )}
               {invitationUrl && (
-                <div className="mt-4 rounded-lg border bg-[#F7F9FC] p-3">
+                <div className="mt-4 rounded-lg border border-border bg-muted/50 text-foreground p-3">
                   <p className="text-sm font-medium">
                     Copy this invitation link
                   </p>
@@ -259,7 +259,7 @@ function SettingsPage() {
             </section>
           )}
           {error && (
-            <p className="text-sm text-red-700">
+            <p className="text-sm text-destructive">
               {error instanceof ApiError
                 ? "The action could not be completed. Check the email or your permissions."
                 : "Network error. Try again."}

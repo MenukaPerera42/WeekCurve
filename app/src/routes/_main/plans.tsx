@@ -323,7 +323,7 @@ function PlansPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-semibold text-[#111C30]">
+          <h1 className="text-3xl font-semibold text-foreground">
             My weekly plan
           </h1>
           <p className="text-muted-foreground">
@@ -345,7 +345,7 @@ function PlansPage() {
         </label>
       </div>
       {!organization && (
-        <div className="rounded-lg border p-6">
+        <div className="rounded-lg border border-border bg-card text-card-foreground p-6">
           {plans.isLoading
             ? "Loading your organization…"
             : "Join or create an organization to plan your week."}
@@ -353,7 +353,7 @@ function PlansPage() {
       )}
       {organization && (
         <>
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <h2 className="text-lg font-semibold">Look back before planning</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Review your previous two weeks for unfinished work and get ideas
@@ -375,14 +375,14 @@ function PlansPage() {
               {aiLookback.isPending ? "Looking back…" : "Look back with AI"}
             </Button>
             {lookbackError && (
-              <p className="mt-3 text-sm text-red-700" role="alert">
+              <p className="mt-3 text-sm text-destructive" role="alert">
                 {lookbackError} You can keep planning manually.
               </p>
             )}
             {lookbackAdvice && (
               <div className="mt-4 space-y-4 text-sm" aria-live="polite">
                 {lookbackAdvice.previous_weeks.length === 0 ? (
-                  <p className="rounded-lg bg-[#F7F9FC] p-3">
+                  <p className="rounded-lg bg-muted/50 text-foreground p-3">
                     No previous plans yet. {lookbackAdvice.message}
                   </p>
                 ) : (
@@ -403,7 +403,7 @@ function PlansPage() {
                           {lookbackAdvice.repeated_work.map((item, index) => (
                             <li
                               key={index}
-                              className="rounded-lg bg-[#F7F9FC] p-3"
+                              className="rounded-lg bg-muted/50 text-foreground p-3"
                             >
                               <p className="font-medium">{item.description}</p>
                               <ul className="mt-2 list-inside list-disc text-muted-foreground">
@@ -450,20 +450,20 @@ function PlansPage() {
               </div>
             )}
           </section>
-          <div className="rounded-xl border bg-white p-5">
+          <div className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <div className="flex items-center justify-between">
               <h2 className="text-lg font-semibold">Plan for {week}</h2>
-              <span className="rounded-full bg-[#DDE4ED] px-3 py-1 text-sm capitalize">
+              <span className="rounded-full bg-secondary text-secondary-foreground px-3 py-1 text-sm capitalize font-medium">
                 {plan?.status ?? "Not started"}
               </span>
             </div>
             {plans.isLoading && <p className="mt-3">Loading plans…</p>}
             {plans.isError && (
-              <p className="mt-3 text-red-700">Could not load plans.</p>
+              <p className="mt-3 text-destructive">Could not load plans.</p>
             )}
             <div className="mt-5 space-y-5">
               {tasks.map((task) => (
-                <div key={task.id} className="rounded-lg border p-4">
+                <div key={task.id} className="rounded-lg border border-border bg-card/50 p-4">
                   <div className="mb-2 flex items-center justify-between">
                     <span className="text-sm font-semibold capitalize">
                       {task.kind.replaceAll("_", " ")}
@@ -471,7 +471,7 @@ function PlansPage() {
                     {editable && task.kind !== "main" && (
                       <button
                         type="button"
-                        className="cursor-pointer text-sm text-red-700"
+                        className="cursor-pointer text-sm text-destructive"
                         onClick={() => {
                           clearLookback();
                           clearSummary();
@@ -535,7 +535,7 @@ function PlansPage() {
                     .map((finding, index) => (
                       <div
                         key={index}
-                        className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm"
+                        className="mt-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-950 dark:text-amber-200"
                       >
                         <p>{finding.problem}</p>
                         <p className="mt-2 font-medium">
@@ -551,7 +551,7 @@ function PlansPage() {
                             setTasks((current) =>
                               current.map((item) =>
                                 item.id === task.id
-                                  ? { ...item, text: finding.suggested_rewrite }
+                                   ? { ...item, text: finding.suggested_rewrite }
                                   : item
                               )
                             );
@@ -603,12 +603,12 @@ function PlansPage() {
               </p>
             )}
             {actionError && (
-              <p className="mt-4 text-sm text-red-700">
+              <p className="mt-4 text-sm text-destructive">
                 {errorMessage(actionError)}
               </p>
             )}
             {message && (
-              <p className="mt-4 text-sm text-green-700">{message}</p>
+              <p className="mt-4 text-sm text-success">{message}</p>
             )}
             <div className="mt-5 flex flex-wrap gap-2">
               {editable && (
@@ -666,7 +666,7 @@ function PlansPage() {
               )}
             </div>
           </div>
-          <section className="rounded-xl border bg-white p-5">
+          <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
             <h2 className="text-lg font-semibold">End-of-week Summary</h2>
             <p className="mt-1 text-sm text-muted-foreground">
               Generate a short note from your saved plan and recorded task progress.
@@ -709,13 +709,13 @@ function PlansPage() {
               </>
             )}
             {summaryError && (
-              <p className="mt-3 text-sm text-red-700" role="alert">
+              <p className="mt-3 text-sm text-destructive" role="alert">
                 {summaryError} You can keep planning normally.
               </p>
             )}
             {visibleSummary && (
               <div className="mt-5 space-y-4 text-sm" aria-live="polite">
-                <div className="rounded-lg bg-[#F7F9FC] p-4">
+                <div className="rounded-lg bg-muted/50 text-foreground p-4">
                   <h3 className="font-semibold">What shipped</h3>
                   <p className="mt-1">
                     {visibleSummary.data.main_goal_shipped === true
@@ -786,7 +786,7 @@ function PlansPage() {
             )}
           </section>
           {editable && (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="text-lg font-semibold">Start from a brain dump</h2>
               <p className="mb-3 text-sm text-muted-foreground">
                 Paste rough notes. The suggested plan stays editable until you
@@ -808,7 +808,7 @@ function PlansPage() {
             </section>
           )}
           {plan?.events.length ? (
-            <section className="rounded-xl border bg-white p-5">
+            <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="font-semibold">History</h2>
               <ul className="mt-3 space-y-2 text-sm">
                 {plan.events.map((event, i) => (

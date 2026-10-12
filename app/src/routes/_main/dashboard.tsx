@@ -29,7 +29,7 @@ function DashboardPage() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-semibold text-[#111C30]">
+        <h1 className="text-3xl font-semibold text-foreground">
           Good to see you{user ? `, ${user.first_name}` : ""}.
         </h1>
         <p className="mt-1 text-muted-foreground">
@@ -38,7 +38,7 @@ function DashboardPage() {
       </div>
       {isLoading && <p>Loading your workspace…</p>}
       {isError && (
-        <p className="text-red-700">Could not load your organizations.</p>
+        <p className="text-destructive">Could not load your organizations.</p>
       )}
       {!isLoading && !organization && (
         <Card>
