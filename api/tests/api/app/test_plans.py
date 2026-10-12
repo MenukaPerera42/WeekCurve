@@ -51,6 +51,7 @@ async def test_only_primary_team_lead_can_approve(async_client, session_factory)
         headers=headers, json={"tasks": [
             {"kind": "main", "text": "Checkout handles expired cards on staging", "why_it_matters": "Customers recover"},
             {"kind": "sub_goal", "text": "End-to-end expired card tests pass"},
+            {"kind": "go_to_market", "text": "Release note is published"},
         ]})
     assert saved.status_code == 200, saved.text
     plan_id = saved.json()["id"]

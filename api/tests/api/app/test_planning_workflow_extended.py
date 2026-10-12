@@ -190,25 +190,30 @@ async def test_missing_go_to_market_blocks_submission_but_allows_draft_and_revis
 
 
 @pytest.mark.asyncio
-async def test_blank_go_to_market_does_not_satisfy_submission_rule(
+async def test_blank_go_to_market_text_is_rejected_by_request_validation(
     async_client, session_factory, workflow
 ):
     org_id = workflow["org"]
     as_user(async_client, workflow["author"])
     payload = tasks()
     payload["tasks"][2]["text"] = "   "
-    draft = await save(async_client, org_id, payload=payload)
-
-    rejected = await async_client.post(
-        f"/app/organizations/{org_id}/plans/{draft['id']}/submit",
-        headers=ORIGIN,
+    rejected = await async_client.put(
+        f"/app/organizations/{org_id}/plans/weeks/{MONDAY.isoformat()}",
+        headers=ORIGIN, json=payload,
     )
-    assert rejected.status_code == 400
-    assert "go-to-market" in rejected.text.lower()
+    assert rejected.status_code == 422
+    assert any(
+        error["loc"] == ["body", "tasks", 2, "text"]
+        and error["type"] == "string_too_short"
+        for error in rejected.json()["detail"]
+    )
     async with session_factory() as db:
-        plan = await db.get(WeeklyPlan, UUID(draft["id"]))
-        assert plan is not None and plan.status == "draft"
-        assert plan.submitted_at is None
+        plan_count = await db.scalar(select(func.count()).select_from(WeeklyPlan).where(
+            WeeklyPlan.organization_id == org_id,
+            WeeklyPlan.author_membership_id == workflow["author_member"],
+            WeeklyPlan.week_start == MONDAY,
+        ))
+        assert plan_count == 0
 
 
 @pytest.mark.asyncio
