@@ -120,13 +120,11 @@ interface ThemeToggleProps {
   variant?: "segmented" | "compact";
 }
 
-export function ThemeToggle({ className, variant = "segmented" }: ThemeToggleProps) {
 export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps) {
   const { theme, setTheme } = useTheme();
 
   if (variant === "compact") {
     return (
-      <div className={`inline-flex items-center gap-1 rounded-lg border border-border bg-muted/60 p-1 text-xs ${className ?? ""}`}>
       <div
         role="group"
         aria-label="Color theme selector"
@@ -138,11 +136,9 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
           aria-pressed={theme === "light"}
           title="Light theme"
           onClick={() => setTheme("light")}
-          className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer ${
           className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
             theme === "light"
               ? "bg-card text-foreground shadow-xs font-medium"
-              : "text-muted-foreground hover:text-foreground"
               : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
           }`}
         >
@@ -154,11 +150,9 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
           aria-pressed={theme === "dark"}
           title="Dark theme"
           onClick={() => setTheme("dark")}
-          className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer ${
           className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
             theme === "dark"
               ? "bg-card text-foreground shadow-xs font-medium"
-              : "text-muted-foreground hover:text-foreground"
               : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
           }`}
         >
@@ -170,11 +164,9 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
           aria-pressed={theme === "system"}
           title="System theme"
           onClick={() => setTheme("system")}
-          className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer ${
           className={`flex size-7 items-center justify-center rounded-md transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
             theme === "system"
               ? "bg-card text-foreground shadow-xs font-medium"
-              : "text-muted-foreground hover:text-foreground"
               : "text-muted-foreground hover:bg-muted/80 hover:text-foreground"
           }`}
         >
@@ -195,7 +187,6 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
         aria-label="Light mode"
         aria-pressed={theme === "light"}
         onClick={() => setTheme("light")}
-        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
         className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
           theme === "light"
             ? "bg-card text-foreground shadow-xs font-medium"
@@ -210,7 +201,6 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
         aria-label="Dark mode"
         aria-pressed={theme === "dark"}
         onClick={() => setTheme("dark")}
-        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
         className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
           theme === "dark"
             ? "bg-card text-foreground shadow-xs font-medium"
@@ -225,7 +215,6 @@ export function ThemeToggle({ className, variant = "compact" }: ThemeToggleProps
         aria-label="System mode"
         aria-pressed={theme === "system"}
         onClick={() => setTheme("system")}
-        className={`flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
         className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1 text-xs transition-colors cursor-pointer ${
           theme === "system"
             ? "bg-card text-foreground shadow-xs font-medium"

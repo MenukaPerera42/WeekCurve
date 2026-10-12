@@ -17,24 +17,19 @@ function MainLayout() {
         <div className="flex h-screen overflow-hidden bg-background text-foreground">
           <Sidebar />
           <MobileNav />
-          <div className="flex flex-1 flex-col overflow-hidden">
-            <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card/40 px-4 backdrop-blur-xs sm:px-6 lg:px-8">
-              <div className="flex items-center gap-3 md:hidden">
-                <Link to="/dashboard" aria-label="WeekCurve">
-                  <Logo className="h-6" />
-                </Link>
-              </div>
-              <div className="hidden md:block" />
-              <div className="flex items-center gap-2">
+          <main className="flex-1 overflow-y-auto">
+            <div className="mx-auto max-w-6xl space-y-6 p-4 pb-32 sm:p-6 lg:p-8">
+              <div className="flex items-center justify-between md:justify-end">
+                <div className="md:hidden">
+                  <Link to="/dashboard" aria-label="WeekCurve">
+                    <Logo className="h-6" />
+                  </Link>
+                </div>
                 <ThemeToggle variant="compact" />
               </div>
-            </header>
-            <main className="flex-1 overflow-y-auto">
-              <div className="mx-auto max-w-6xl space-y-6 p-4 pb-32 sm:p-6 lg:p-8">
-                <Outlet />
-              </div>
-            </main>
-          </div>
+              <Outlet />
+            </div>
+          </main>
         </div>
       </OrganizationProvider>
     </AuthGuard>
