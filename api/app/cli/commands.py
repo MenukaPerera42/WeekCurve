@@ -165,6 +165,8 @@ async def seed_demo(password: str = Option(..., help="Password for local demo ac
                     continue
                 lead_membership = next(m for m in memberships if m.user_id == lead.id)
                 await plans.decide(plan, lead_membership.id, True, "Clear outcomes")
+                if weeks_ago == 1 and author.id == member.id:
+                    continue
                 tasks = await plans.tasks(plan.id)
                 for task in tasks[:2]:
                     await plans.toggle_task(plan, task.id, author_membership.id, True)
