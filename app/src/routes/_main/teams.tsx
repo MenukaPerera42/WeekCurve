@@ -14,7 +14,6 @@ import {
 } from "@/api/endpoints/teams/teams";
 import { listMembers } from "@/api/endpoints/organizations/organizations";
 import {
-  myPlans,
   teamWeek,
   getPlan,
   approvePlan,
@@ -30,22 +29,17 @@ export const Route = createFileRoute("/_main/teams")({ component: TeamsPage });
 
 function monday() {
   const date = new Date();
+  date.setHours(12, 0, 0, 0);
   date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
-function formatWeekDisplay(dateStr: string): string {
-  if (!dateStr) return "";
-  const parts = dateStr.split("-").map(Number);
-  const year = parts[0];
-  const month = parts[1];
-  const day = parts[2];
-  if (year === undefined || month === undefined || day === undefined) return "";
-  const d = new Date(year, month - 1, day, 12, 0, 0);
-  return d.toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
+function mondayFor(dateStr: string): string {
+  const [year, month, day] = dateStr.split("-").map(Number);
+  if (!year || !month || !day) return "";
+  const date = new Date(year, month - 1, day, 12, 0, 0);
+  date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
 function TeamsPage() {
@@ -60,7 +54,7 @@ function TeamsPage() {
   const [week, setWeek] = useState(monday);
   const [newName, setNewName] = useState("");
   const [addMemberId, setAddMemberId] = useState("");
-  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [selectedPlan, setSelectedPlan] = useState<{ id: string; scope: string } | null>(null);
   const [feedback, setFeedback] = useState("");
   const [digestResult, setDigestResult] = useState<{
     scope: string;
@@ -73,25 +67,6 @@ function TeamsPage() {
   const digestVersion = useRef(0);
   const currentDigestScope = useRef("");
 
-  const userPlans = useQuery({
-    queryKey: ["my-plans", orgId],
-    queryFn: () => myPlans(orgId),
-    enabled: !!orgId,
-  });
-
-  const availableWeeks = useMemo(() => {
-    const set = new Set<string>();
-    set.add(currentMonday);
-    if (userPlans.data) {
-      for (const p of userPlans.data) {
-        if (p.week_start) {
-          set.add(p.week_start);
-        }
-      }
-    }
-    return Array.from(set).sort((a, b) => b.localeCompare(a));
-  }, [userPlans.data, currentMonday]);
-
   const teams = useQuery({
     queryKey: ["teams", orgId],
     queryFn: () => listTeams(orgId),
@@ -100,6 +75,12 @@ function TeamsPage() {
   const selectedTeam =
     teams.data?.find((team) => team.id === teamId) ?? teams.data?.[0];
   const activeTeamId = selectedTeam?.id ?? "";
+  const planScope = JSON.stringify([orgId, activeTeamId, week]);
+  const selectedPlanId = selectedPlan?.scope === planScope ? selectedPlan.id : "";
+  useEffect(() => {
+    setSelectedPlan(null);
+    setFeedback("");
+  }, [planScope]);
   const members = useQuery({
     queryKey: ["team-members", orgId, activeTeamId],
     queryFn: () => listTeamMembers(orgId, activeTeamId),
@@ -121,7 +102,9 @@ function TeamsPage() {
   const detail = useQuery({
     queryKey: ["team-plan", orgId, selectedPlanId],
     queryFn: () => getPlan(orgId, selectedPlanId),
-    enabled: !!selectedPlanId,
+    enabled: !!selectedPlanId && !!weekView.data?.some(
+      (item) => item.plan_id === selectedPlanId
+    ),
     refetchOnMount: "always",
     refetchOnWindowFocus: "always",
   });
@@ -209,14 +192,13 @@ function TeamsPage() {
     queryClient.invalidateQueries({ queryKey: ["team-members", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-week", orgId] });
     queryClient.invalidateQueries({ queryKey: ["team-plan", orgId] });
-    queryClient.invalidateQueries({ queryKey: ["my-plans", orgId] });
   };
   const create = useMutation({
     mutationFn: () => createTeam(orgId, { name: newName.trim() }),
     onSuccess: (team) => {
       setNewName("");
       setTeamId(team.id);
-      setSelectedPlanId("");
+      setSelectedPlan(null);
       setFeedback("");
       refresh();
     },
@@ -323,7 +305,7 @@ function TeamsPage() {
                 value={activeTeamId}
                 onChange={(e) => {
                   setTeamId(e.target.value);
-                  setSelectedPlanId("");
+                  setSelectedPlan(null);
                   setFeedback("");
                 }}
               >
@@ -425,24 +407,32 @@ function TeamsPage() {
                 <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-1.5 shadow-xs">
                   <CalendarDays className="size-4 text-primary shrink-0" />
                   <span className="text-xs font-medium text-muted-foreground">Week:</span>
-                  <select
+                  <input
+                    type="date"
                     aria-label="Select team planning week"
                     className="bg-transparent text-xs font-semibold text-foreground focus:outline-none cursor-pointer pr-1"
                     value={week}
                     onChange={(e) => {
-                      setWeek(e.target.value);
-                      setSelectedPlanId("");
+                      const selectedMonday = mondayFor(e.target.value);
+                      if (!selectedMonday) return;
+                      setWeek(selectedMonday);
+                      setSelectedPlan(null);
                       setFeedback("");
                     }}
-                  >
-                    {availableWeeks.map((w) => (
-                      <option key={w} value={w} className="bg-popover text-popover-foreground">
-                        {w === currentMonday
-                          ? `Current Week (${formatWeekDisplay(w)})`
-                          : `Week of ${formatWeekDisplay(w)}`}
-                      </option>
-                    ))}
-                  </select>
+                  />
+                  {week !== currentMonday && (
+                    <button
+                      type="button"
+                      className="text-xs font-medium text-primary cursor-pointer"
+                      onClick={() => {
+                        setWeek(currentMonday);
+                        setSelectedPlan(null);
+                        setFeedback("");
+                      }}
+                    >
+                      Current week
+                    </button>
+                  )}
                 </div>
               </div>
               {weekView.isLoading && <p className="mt-4">Loading the week…</p>}
@@ -466,7 +456,7 @@ function TeamsPage() {
                     key={item.member_id}
                     disabled={!item.plan_id}
                     className="rounded-lg border border-border bg-card/60 text-card-foreground p-4 text-left transition hover:border-primary/50 disabled:opacity-60 cursor-pointer"
-                    onClick={() => setSelectedPlanId(item.plan_id ?? "")}
+                    onClick={() => setSelectedPlan({ id: item.plan_id ?? "", scope: planScope })}
                   >
                     <strong>{item.member_name}</strong>
                     <p className="mt-1 text-sm capitalize">
@@ -624,7 +614,10 @@ function TeamsPage() {
               </div>
             )}
           </section>
-          {detail.data && (
+          {detail.data && selectedPlanId && detail.data.id === selectedPlanId &&
+            detail.data.week_start === week && weekView.data?.some(
+              (item) => item.plan_id === selectedPlanId
+            ) && (
             <section className="rounded-xl border border-border bg-card text-card-foreground p-5">
               <h2 className="font-semibold">
                 Plan review · {detail.data.week_start}
