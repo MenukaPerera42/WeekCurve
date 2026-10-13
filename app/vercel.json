@@ -5,6 +5,10 @@
   "outputDirectory": "dist/client",
   "rewrites": [
     {
+      "source": "/app/:path*",
+      "destination": "https://weekcurve-api.onrender.com/app/:path*"
+    },
+    {
       "source": "/((?!app(?:/|$)).*)",
       "destination": "/_shell.html"
     }
