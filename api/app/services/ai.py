@@ -2,6 +2,7 @@ import asyncio
 import json
 import time
 import uuid
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date
 from typing import Literal, Never
@@ -23,6 +24,24 @@ from app.models import (
 )
 
 MODEL = "gemini-3.5-flash-lite"
+
+
+def log_ai_failure(feature: str, outcome: str, provider_status: int | None,
+                   latency_ms: int) -> None:
+    """Record only fixed failure metadata; logging must not affect the request."""
+    safe_feature = feature if feature in (
+        "brain_dump", "review", "look_back", "weekly_summary", "team_digest",
+    ) else "unknown"
+    safe_outcome = outcome if outcome in (
+        "unavailable", "timeout", "invalid_output", "rate_limited", "failure",
+    ) else "failure"
+    safe_status = (provider_status if type(provider_status) is int
+                   and 100 <= provider_status <= 599 else None)
+    with suppress(Exception):
+        logger.warning(
+            "ai_failure feature=%s outcome=%s provider_status=%s latency_ms=%d",
+            safe_feature, safe_outcome, safe_status, latency_ms,
+        )
 
 
 class ReviewTask(BaseModel):
@@ -395,32 +414,26 @@ class AIService:
                 response = getattr(exc, "response", None)
                 provider_status = getattr(response, "status_code", None)
             outcome = "rate_limited" if provider_status == 429 else "failure"
-            if feature == "look_back":
-                try:
-                    logger.warning(
-                        "look_back_runtime_failure feature=look_back error_type=%s "
-                        "tool_calls=%d history_plans=%d provider_status=%s",
-                        type(exc).__name__, deps.tool_calls if deps is not None else 0,
-                        len(deps.history or []) if deps is not None else 0,
-                        provider_status,
-                    )
-                except Exception:
-                    pass
             message = ("AI is busy. Try again later, or continue manually." if provider_status == 429
                        else "AI is unavailable right now. You can keep planning manually.")
             raise APIException(429 if provider_status == 429 else 503, "AI_UNAVAILABLE", message) from exc
         finally:
+            latency_ms = int((time.monotonic() - start) * 1000)
             self.last_usage = AIUsage(organization_id=self.organization_id,
                 actor_membership_id=self.actor_membership_id, feature=feature,
                 outcome=outcome, provider_status=provider_status, model=MODEL,
-                latency_ms=int((time.monotonic() - start) * 1000))
+                latency_ms=latency_ms)
             self.session.add(self.last_usage)
             await self.session.flush()
+            if outcome != "success":
+                log_ai_failure(feature, outcome, provider_status, latency_ms)
 
     async def _invalid_output(self) -> None:
         if self.last_usage is not None:
             self.last_usage.outcome = "invalid_output"
             await self.session.flush()
+            log_ai_failure(self.last_usage.feature, "invalid_output",
+                           self.last_usage.provider_status, self.last_usage.latency_ms)
 
     async def review(self, tasks: list[ReviewTask]) -> PlanReview:
         if sum(t.kind == "main" for t in tasks) != 1:

@@ -54,10 +54,10 @@ async def test_runtime_failure_logs_safe_classification_without_changing_respons
     assert error.value.message == "AI is unavailable right now. You can keep planning manually."
     assert len(session.usage) == 1 and session.usage[0].outcome == "failure"
     diagnostics = [record.getMessage() for record in caplog.records
-                   if record.getMessage().startswith("look_back_runtime_failure")]
+                   if record.getMessage().startswith("ai_failure")]
     assert diagnostics == [
-        "look_back_runtime_failure feature=look_back error_type=RuntimeError "
-        "tool_calls=0 history_plans=0 provider_status=None"
+        "ai_failure feature=look_back outcome=failure provider_status=None "
+        f"latency_ms={session.usage[0].latency_ms}"
     ]
     assert "private-plan-text-and-provider-detail" not in diagnostics[0]
 
