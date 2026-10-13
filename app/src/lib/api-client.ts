@@ -1,15 +1,15 @@
 // Shared fetch mutator used by all Orval-generated endpoints.
 // Cookie-based auth: `credentials: "include"` sends the session cookie to the API.
-// Fail at load rather than letting an unset var produce a `undefined/...`
-// URL, which resolves against the dev server and 404s confusingly.
+// Local development uses VITE_API_URL; production requests stay on the
+// frontend origin so the hosting proxy can forward the /app path.
 const apiUrl = import.meta.env.VITE_API_URL;
-if (!apiUrl) {
+if (import.meta.env.DEV && !apiUrl) {
   throw new Error(
-    "VITE_API_URL is not set — set it in .env.development / .env.production"
+    "VITE_API_URL is not set — set it in .env.development"
   );
 }
 
-const baseURL = `${apiUrl}/app`;
+const baseURL = import.meta.env.PROD ? "/app" : `${apiUrl}/app`;
 
 // Error thrown for non-2xx responses: HTTP `status` and the parsed response
 // `data`. Network failures (no response) surface as the native fetch
