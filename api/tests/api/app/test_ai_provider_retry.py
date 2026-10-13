@@ -94,7 +94,37 @@ async def test_look_back_retries_503_and_still_calls_history_tool(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_persistent_503_stops_after_one_retry_and_logs_safely(caplog, monkeypatch):
+async def test_two_503_retries_use_short_exponential_backoff(monkeypatch):
+    attempts = 0
+    delays = []
+
+    async def record_sleep(seconds):
+        delays.append(seconds)
+
+    monkeypatch.setattr(ai.asyncio, "sleep", record_sleep)
+    monkeypatch.setattr(ai.random, "uniform", lambda low, high: low)
+
+    async def respond(messages, info):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            raise ModelHTTPError(503, ai.MODEL, body={"error": "private"})
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
+            "tasks": [{"kind": "main", "text": "Checkout works on staging"}],
+        })])
+
+    service, session = service_with_model(respond)
+    result = await service._run("brain_dump", ai.GeneratedPlan, "Instructions", "Prompt")
+
+    assert attempts == 3
+    assert delays == [0.25, 0.5]
+    assert result.tasks[0].text == "Checkout works on staging"
+    assert len(session.usage) == 1
+    assert session.usage[0].outcome == "success"
+
+
+@pytest.mark.asyncio
+async def test_persistent_503_stops_after_two_retries_and_logs_safely(caplog, monkeypatch):
     attempts = 0
     private_text = "private-provider-response-and-plan"
     monkeypatch.setattr(ai.random, "uniform", lambda low, high: 0)
@@ -111,7 +141,7 @@ async def test_persistent_503_stops_after_one_retry_and_logs_safely(caplog, monk
     ):
         await service._run("look_back", ai.GeneratedPlan, "Instructions", private_text)
 
-    assert attempts == 2
+    assert attempts == 3
     assert error.value.status_code == 503
     assert error.value.code == "AI_UNAVAILABLE"
     assert len(session.usage) == 1

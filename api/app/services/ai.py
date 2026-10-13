@@ -25,6 +25,7 @@ from app.models import (
 )
 
 MODEL = "gemini-3.5-flash-lite"
+MAX_PROVIDER_503_RETRIES = 2
 
 
 def log_ai_failure(feature: str, outcome: str, provider_status: int | None,
@@ -392,16 +393,14 @@ class AIService:
             if output_validator is not None:
                 agent.output_validator(output_validator)
             async def run_with_transient_retry():
-                async def run_once():
-                    return await agent.run(prompt, deps=deps) if deps is not None else await agent.run(prompt)
-
-                try:
-                    return await run_once()
-                except ModelHTTPError as exc:
-                    if exc.status_code != 503:
-                        raise
-                    await asyncio.sleep(random.uniform(0.25, 0.75))
-                    return await run_once()
+                for retry in range(MAX_PROVIDER_503_RETRIES + 1):
+                    try:
+                        return await agent.run(prompt, deps=deps) if deps is not None else await agent.run(prompt)
+                    except ModelHTTPError as exc:
+                        if exc.status_code != 503 or retry == MAX_PROVIDER_503_RETRIES:
+                            raise
+                        base_delay = 0.25 * 2 ** retry
+                        await asyncio.sleep(random.uniform(base_delay, base_delay * 2))
 
             result = await asyncio.wait_for(
                 run_with_transient_retry(), timeout=settings.AI_TIMEOUT_SECONDS,
