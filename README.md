@@ -22,6 +22,19 @@ actually shipped. The application builds on the Launchbase monorepo.
 The backend's `/` path has no route and may return 404; use `/app/health` for
 its health check. The internal console is for platform staff accounts.
 
+## Demo Access
+
+### Internal Admin Console (Staff)
+- **Hosted Console**: [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/)
+- **Email**: `staff@example.com`
+- **Password**: Provided securely to authorized reviewers upon request (never stored in public documentation or Git history).
+- **Access Model**: The Staff Admin account is a platform-level administrative identity separate from customer organization memberships. It operates on an independent `/internal` API surface and dedicated staff JWT audience, giving staff cross-organization visibility into users, organizations, and AI usage metrics without mingling with customer tenant data.
+
+### Customer Application
+- **Hosted App**: [https://week-curve.vercel.app/](https://week-curve.vercel.app/)
+- **Signup**: Reviewers can self-register a new organization and user account directly at [week-curve.vercel.app/signup](https://week-curve.vercel.app/signup).
+- **Local Demo Data**: To evaluate pre-populated multi-organization demo data with existing plans and roles, see the [Demo data and logins](SUBMISSION.md#demo-data-and-logins) section in SUBMISSION.md.
+
 ## Features
 
 - Email/password signup and login; organizations with owner, admin, and member

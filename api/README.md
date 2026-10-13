@@ -24,6 +24,7 @@ uv run fastapi dev                       # http://localhost:8000
 ```
 
 Git hooks are managed at the repo root — see the [root README](../README.md#git-hooks).
+Code quality checks across the monorepo use Ruff and Pyright — see the [root README](../README.md) for quality checks.
 
 App API docs: <http://localhost:8000/app/docs>
 
@@ -76,3 +77,11 @@ From the repo root:
 uv run ruff check app tests
 uv run pyright
 ```
+
+## Production Deployment
+
+- **Hosted API**: [https://weekcurve-api.onrender.com](https://weekcurve-api.onrender.com)
+- **Health Check**: [https://weekcurve-api.onrender.com/app/health](https://weekcurve-api.onrender.com/app/health)
+- **Hosting Platform**: Render (Web Service running Python 3.12 / FastAPI)
+- **Production Database**: Neon PostgreSQL 18.6 (`neondb`), with TLS certificate and hostname verification enabled.
+- **Service Behavior**: The API runs on a Render Free Web Service and may sleep when idle; the initial request after inactivity will take a few moments to spin up.

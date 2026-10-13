@@ -94,6 +94,8 @@ Git hooks for the whole monorepo are managed by
 [pre-commit](https://pre-commit.com) at the repo root — oxfmt, oxlint, and
 `tsc` run automatically on staged `internal/` files before each commit. See the
 [root README](../README.md#git-hooks) for setup.
+Code quality checks across the monorepo use oxfmt, oxlint, and
+`tsc` on `internal/` files. See the [root README](../README.md) for quality checks.
 
 Linting and formatting use the [oxc](https://oxc.rs) toolchain (same org as
 Vite and Rolldown) rather than ESLint and Prettier: `oxlint` reads
@@ -135,7 +137,19 @@ make build             # -> dist/client/
 ```
 
 ### Cloudflare Static Hosting
+### Production Hosting (Vercel)
 
 This template is optimized for deployment on **Cloudflare Pages**. Publish the
 `dist/client/` directory. `public/_redirects` ships the SPA fallback rule that
 serves `_shell.html` for every path, so deep links like `/users` resolve.
+The platform staff console is hosted on **Vercel** at [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/).
+
+The build produces static SPA output in `dist/client/`. Production routing and API proxying are handled by `vercel.json`:
+- `/internal/*` requests are proxied directly to the FastAPI backend on Render (`https://weekcurve-api.onrender.com/internal/*`), maintaining same-origin cookie handling for staff JWTs.
+- All non-API routes fall back to `/_shell.html` for client-side SPA routing so deep links (e.g. `/dashboard`, `/users`, `/organizations`, `/ai-usage`) resolve cleanly.
+
+### Hosted Staff Access
+- **URL**: [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/)
+- **Staff Email**: `staff@example.com`
+- **Password**: Provided securely to authorized reviewers upon request (never stored in public documentation or Git history).
+- **Access Model**: The Staff Admin account is a platform-level administrative identity separate from customer organization memberships. It operates on an independent `/internal` API surface and dedicated staff JWT audience.

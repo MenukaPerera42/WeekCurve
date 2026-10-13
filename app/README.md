@@ -91,6 +91,8 @@ Git hooks for the whole monorepo are managed by
 [pre-commit](https://pre-commit.com) at the repo root — oxfmt, oxlint, and
 `tsc` run automatically on staged `app/` files before each commit. See the
 [root README](../README.md#git-hooks) for setup.
+Code quality checks across the monorepo use oxfmt, oxlint, and
+`tsc` on `app/` files. See the [root README](../README.md) for quality checks.
 
 Linting and formatting use the [oxc](https://oxc.rs) toolchain (same org as
 Vite and Rolldown) rather than ESLint and Prettier: `oxlint` reads
@@ -132,7 +134,13 @@ make build             # -> dist/client/
 ```
 
 ### Cloudflare Static Hosting
+### Production Hosting (Vercel)
 
 This template is optimized for deployment on **Cloudflare Pages**. Publish the
 `dist/client/` directory. `public/_redirects` ships the SPA fallback rule that
 serves `_shell.html` for every path, so deep links like `/dashboard` resolve.
+The customer app is hosted on **Vercel** at [https://week-curve.vercel.app/](https://week-curve.vercel.app/).
+
+The build produces static SPA output in `dist/client/`. Production routing and API proxying are handled by `vercel.json`:
+- `/app/*` requests are proxied directly to the FastAPI backend on Render (`https://weekcurve-api.onrender.com/app/*`), ensuring same-origin cookie handling.
+- All non-API routes fall back to `/_shell.html` for client-side SPA routing so deep links (e.g. `/dashboard`, `/plans`, `/teams`) resolve cleanly.

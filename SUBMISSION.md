@@ -2,9 +2,33 @@
 
 **Plan the week. Ship the goal.** WeekCurve helps startups and small software teams agree on one shippable weekly outcome per member, get a team lead's approval, and see what actually shipped. The name connects the weekly planning cadence with progress from intention to delivery.
 
+## Live Deployment and Hosted Demo Access
+
+The complete WeekCurve application suite is deployed and publicly accessible:
+
+| Service | Live URL | Deployment Architecture |
+| --- | --- | --- |
+| Marketing website | [https://weekcurve-site.vercel.app/](https://weekcurve-site.vercel.app/) | Static Jamstack on Vercel |
+| Customer application | [https://week-curve.vercel.app/](https://week-curve.vercel.app/) | TanStack Start SPA on Vercel with `/app/*` rewrites to Render |
+| Internal admin console | [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/) | TanStack Start SPA on Vercel with `/internal/*` rewrites to Render |
+| FastAPI backend | [https://weekcurve-api.onrender.com](https://weekcurve-api.onrender.com) | Python 3.12 / FastAPI on Render Free Web Service |
+| API health check | [https://weekcurve-api.onrender.com/app/health](https://weekcurve-api.onrender.com/app/health) | Backend health probe (`/` returns 404 by design) |
+| Production database | Neon PostgreSQL 18.6 (`neondb`) | Managed serverless PostgreSQL with TLS verification |
+
+### Hosted Staff Console Access
+- **URL**: [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/)
+- **Staff Email**: `staff@example.com`
+- **Password**: Provided securely to authorized reviewers upon request (never committed or exposed in public documentation).
+- **Staff Access Model**: The Staff Admin account is a platform-level role on an independent `/internal` API surface with a dedicated JWT audience. It is completely decoupled from customer tenant organization memberships and provides cross-organization user, organization, and AI telemetry oversight.
+
+### Hosted Customer Access
+- **URL**: [https://week-curve.vercel.app/](https://week-curve.vercel.app/)
+- **Access**: Reviewers can self-register a new organization and user account directly at [week-curve.vercel.app/signup](https://week-curve.vercel.app/signup).
+
 ## Stack and prerequisites
 
 - API: Python 3.12, uv, FastAPI, Pydantic AI, async SQLAlchemy, Alembic, PostgreSQL 16.
+- API: Python 3.12, uv, FastAPI, Pydantic AI, async SQLAlchemy, Alembic, PostgreSQL 16 (local development baseline) and PostgreSQL 18.6 (Neon production).
 - Customer app and staff console: React, TypeScript, TanStack Start, TanStack Query, and Orval-generated API clients.
 - Marketing site: statically generated TanStack Start.
 - Local tools: Node.js 24+, npm, PostgreSQL 16, and Docker for Testcontainers-based backend tests.
@@ -42,6 +66,7 @@ cd site && npm ci && make run      # http://localhost:3000
 ```
 
 The committed development frontend environment files point to the local API or customer app. For deployment, set the public `VITE_API_URL` in `app/.env.production` and `internal/.env.production`, and `VITE_APP_URL` in `site/.env.production`, to the real destinations before building. **TODO (deployment owner):** supply those URLs if deploying; deployment itself is outside this assessment.
+The committed development frontend environment files point to the local API or customer app. In production, the frontends are hosted on Vercel: `app/vercel.json` and `internal/vercel.json` rewrite `/app/*` and `/internal/*` to the FastAPI backend on Render (https://weekcurve-api.onrender.com), preserving same-origin cookie handling, while `site/` links to the live customer app.
 
 ## Demo data and logins
 
@@ -71,8 +96,19 @@ uv run manage.py create-user \
 The CLI prints a generated password if `--password` is omitted. Keep that credential private. **TODO (submitter):** confirm the intended demo password and staff login setup privately before handing the archive to a reviewer; do not publish a real user's credential.
 
 ## Gemini configuration
+## Gemini configuration and AI features
 
 AI is optional for manual planning. To enable it, place a Google AI Studio key only in the ignored `api/.env` as `GOOGLE_API_KEY`; leave `api/.env.example` blank. The backend uses Pydantic AI structured outputs with `google:gemini-3.5-flash-lite`. The key is never sent to a frontend. AI drafts fill an editable form and are not saved until the member chooses Save Draft.
+AI features use Pydantic AI structured outputs with `google:gemini-3.5-flash-lite`. AI is optional for manual planning; to enable it locally, place a Google AI Studio key in the ignored `api/.env` as `GOOGLE_API_KEY` (leave `api/.env.example` blank). The key is never sent to a frontend. AI drafts fill an editable form and are not saved until the member chooses Save Draft.
+
+### Implemented AI Capabilities
+- **Brain Dump**: Converts unstructured thoughts or rough notes into a structured, editable Monday-keyed plan draft (main goal, sub-goals, and GTM tasks).
+- **Plan Review**: Returns task-linked findings, actionable suggestions, and suggested rewrites with bounded retries.
+- **Look Back Before Planning**: Uses a model tool call to inspect the member's prior two weekly plans to provide retrospective context.
+- **End-of-Week Summary**: Summarizes completed tasks, shipped goals, and open work at the close of the week.
+- **Team Digest**: Synthesizes weekly progress across all team members for team leads.
+
+> **Scope Deviation Disclosure**: The assignment guidelines specify implementing *at most one* optional AI feature. WeekCurve implements all three optional AI capabilities (Look Back Before Planning, End-of-Week Summary, and Team Digest) in addition to core Brain Dump and Plan Review. This deviation was chosen to provide a cohesive weekly planning and review cycle across all team roles, and is transparently disclosed here for grading evaluation.
 
 ## Implementation and security decisions
 
@@ -98,9 +134,12 @@ For each of `app/`, `internal/`, and `site/`, run `npm run validate` and `npm ru
 ## Limits, tradeoffs, and time
 
 - Invitations are copied as links rather than sent by email, as permitted by the assessment. Email verification, password reset, billing, SSO, and deployment are outside its requested scope.
+- Invitations are copied as links rather than sent by email, as permitted by the assessment. Email verification, password reset, billing, and SSO are outside its requested scope. Live deployment has been fully provisioned across Vercel, Render, and Neon.
 - Gemini review quality can vary, and provider quotas or outages may prevent a review. Manual plan editing and submission remain available.
 - Production frontend URLs still need real deployment values if the applications are published. Verify migration, seed, demo logins, and navigation from a fresh extraction before submitting.
 - Optional end-of-week AI summary, look-back tool, and team digest were not built; the core tenant, planning, and AI workflows took priority.
+- As a Render Free service, the backend may sleep when idle; the initial request after dormancy will take a few moments to spin up.
+- All three optional AI capabilities (Look Back Before Planning, End-of-Week Summary, and Team Digest) are implemented, exceeding the assessment's suggested limit of at most one optional feature (as disclosed above).
 
 **Actual development time:** TODO (submitter): enter the honest total hours spent. This cannot be determined from repository history.
 
