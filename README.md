@@ -27,7 +27,7 @@ its health check. The internal console is for platform staff accounts.
 ### Internal Admin Console (Staff)
 - **Hosted Console**: [https://weekcurve-internal.vercel.app/](https://weekcurve-internal.vercel.app/)
 - **Email**: `staff@example.com`
-- **Password**: Provided securely to authorized reviewers upon request (never stored in public documentation or Git history).
+- **Password**: Provided securely to authorized reviewers upon request.
 - **Access Model**: The Staff Admin account is a platform-level administrative identity separate from customer organization memberships. It operates on an independent `/internal` API surface and dedicated staff JWT audience, giving staff cross-organization visibility into users, organizations, and AI usage metrics without mingling with customer tenant data.
 
 ### Customer Application
