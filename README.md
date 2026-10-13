@@ -1,7 +1,7 @@
 <p align="center">
   <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="branding/logos/weekcurve-logo-dark.svg">
-    <img src="branding/logos/weekcurve-logo-light.svg" alt="WeekCurve" width="560">
+    <source media="(prefers-color-scheme: dark)" srcset="branding/logos/weekcurve-logo-light.svg">
+    <img src="branding/logos/weekcurve-logo-dark.svg" alt="WeekCurve" width="560">
   </picture>
 </p>
 
