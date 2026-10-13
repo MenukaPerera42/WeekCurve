@@ -362,7 +362,8 @@ class AIService:
             agent = Agent(model, output_type=output_type,
                           instructions=instructions,
                           model_settings={"temperature": 0.0} if feature in ("review", "look_back", "weekly_summary", "team_digest") else None,
-                          **({"retries": {"output": 1}} if feature in ("review", "look_back", "weekly_summary", "team_digest") else {}),
+                          **({"retries": {"output": 2 if feature == "review" else 1}}
+                             if feature in ("review", "look_back", "weekly_summary", "team_digest") else {}),
                           **({"deps_type": LookbackDeps} if deps is not None else {}))
             if tool is not None:
                 agent.tool(tool)
@@ -381,7 +382,9 @@ class AIService:
         except Exception as exc:
             if (feature in ("review", "look_back", "weekly_summary", "team_digest")
                     and isinstance(exc, UnexpectedModelBehavior)
-                    and exc.message.startswith("Exceeded maximum output retries (1)")):
+                    and exc.message.startswith(
+                        f"Exceeded maximum output retries ({2 if feature == 'review' else 1})"
+                    )):
                 outcome = "invalid_output"
                 message = ("AI returned unusable advice. Try again later." if feature == "look_back"
                            else "AI returned an incomplete review. Try again later." if feature == "review"
@@ -453,10 +456,16 @@ class AIService:
                 if (not checks.main_goal_explains_value or not checks.go_to_market_covered
                         or not checks.weekly_scope_realistic):
                     flagged.add(next(task.id for task in tasks if task.kind == "main"))
-                if not flagged.issubset({finding.task_id for finding in output.findings}):
+                missing = flagged - {finding.task_id for finding in output.findings}
+                if missing:
                     logger.warning("ai_review_invalid_output reason=missing_findings task_count=%d assessment_count=%d finding_count=%d",
                                    len(tasks), len(assessed), len(output.findings))
-                    raise ModelRetry("Add concrete findings for every task with a failed quality check.")
+                    raise ModelRetry(
+                        "The following supplied task IDs have a failed quality check but "
+                        f"no finding: {', '.join(sorted(missing))}. Add a concrete finding "
+                        "and suggested rewrite for each, or correct a check if the task "
+                        "actually meets that criterion. Do not invent problems."
+                    )
             return output
 
         result: InternalPlanReview = await self._run(
