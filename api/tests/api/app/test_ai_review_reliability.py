@@ -120,3 +120,60 @@ async def test_review_retries_incomplete_coverage_and_accepts_corrected_output()
     assert len(calls) == 2
     assert len(session.usage) == 1
     assert session.usage[0].outcome == "success"
+
+
+@pytest.mark.asyncio
+async def test_review_retries_missing_finding_with_specific_feedback():
+    calls = []
+
+    async def respond(messages, info):
+        calls.append(messages)
+        output = {
+            "verdict": "adjust",
+            "findings": (
+                [{"task_id": "sub-1", "problem": "Activity has no measurable result",
+                  "suggested_rewrite": "Launch email is ready for review"}]
+                if len(calls) == 3 else []
+            ),
+            "task_assessments": [{"task_id": "main-1", **GOOD},
+                                 {"task_id": "sub-1", **GOOD, "activity_only": True}],
+            "plan_checks": CHECKS,
+        }
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
+
+    session = RecordingSession()
+    service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(), model=FunctionModel(respond))
+    review = await service.review(TASKS)
+
+    assert len(calls) == 3
+    assert review.verdict == "adjust"
+    assert [finding.task_id for finding in review.findings] == ["sub-1"]
+    assert "sub-1" in str(calls[1])
+    assert "no finding" in str(calls[1])
+    assert session.usage[0].outcome == "success"
+
+
+@pytest.mark.asyncio
+async def test_review_still_rejects_missing_finding_after_bounded_retries():
+    calls = []
+
+    async def respond(messages, info):
+        calls.append(messages)
+        output = {
+            "verdict": "approve", "findings": [],
+            "task_assessments": [{"task_id": "main-1", **GOOD},
+                                 {"task_id": "sub-1", **GOOD, "activity_only": True}],
+            "plan_checks": CHECKS,
+        }
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, output)])
+
+    session = RecordingSession()
+    service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(), model=FunctionModel(respond))
+    with pytest.raises(APIException) as error:
+        await service.review(TASKS)
+
+    assert len(calls) == 3
+    assert error.value.code == "AI_INVALID_OUTPUT"
+    assert error.value.status_code == 503
+    assert "sub-1" not in error.value.message
+    assert session.usage[0].outcome == "invalid_output"
