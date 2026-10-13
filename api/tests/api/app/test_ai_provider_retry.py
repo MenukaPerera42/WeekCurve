@@ -182,7 +182,7 @@ async def test_other_provider_statuses_are_not_retried(provider_status):
 @pytest.mark.asyncio
 async def test_retry_delay_consumes_the_original_deadline(monkeypatch):
     attempts = 0
-    monkeypatch.setattr(ai.settings, "AI_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(ai.settings, "AI_LOOKBACK_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(ai.random, "uniform", lambda low, high: 0.05)
 
     async def respond(messages, info):
@@ -204,7 +204,7 @@ async def test_retry_delay_consumes_the_original_deadline(monkeypatch):
 @pytest.mark.asyncio
 async def test_second_attempt_cannot_exceed_total_deadline(monkeypatch):
     attempts = 0
-    monkeypatch.setattr(ai.settings, "AI_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(ai.settings, "AI_WEEKLY_SUMMARY_TIMEOUT_SECONDS", 0.02)
     monkeypatch.setattr(ai.random, "uniform", lambda low, high: 0)
 
     async def respond(messages, info):

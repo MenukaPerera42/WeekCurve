@@ -1,6 +1,6 @@
 from typing import Literal, Self
 
-from pydantic import field_validator, model_validator
+from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -21,6 +21,8 @@ class Settings(BaseSettings):
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
     GOOGLE_API_KEY: str | None = None
     AI_TIMEOUT_SECONDS: float = 20.0
+    AI_LOOKBACK_TIMEOUT_SECONDS: float = Field(default=45.0, gt=0, le=90)
+    AI_WEEKLY_SUMMARY_TIMEOUT_SECONDS: float = Field(default=45.0, gt=0, le=90)
 
     # JWT Token settings
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours

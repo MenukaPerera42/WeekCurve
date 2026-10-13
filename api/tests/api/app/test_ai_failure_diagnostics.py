@@ -118,7 +118,7 @@ async def test_timeout_logs_the_existing_outcome_and_error(caplog, monkeypatch):
     async def slow_provider(messages, info):
         await asyncio.sleep(0.1)
 
-    monkeypatch.setattr(ai.settings, "AI_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(ai.settings, "AI_WEEKLY_SUMMARY_TIMEOUT_SECONDS", 0.01)
     session = RecordingSession()
     service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(),
                            model=FunctionModel(slow_provider))
@@ -277,7 +277,7 @@ async def test_lookback_tool_timeout_records_tool_duration(caplog, monkeypatch):
     async def respond(messages, info):
         return ModelResponse(parts=[ToolCallPart("previous_two_plans", {})])
 
-    monkeypatch.setattr(ai.settings, "AI_TIMEOUT_SECONDS", 0.01)
+    monkeypatch.setattr(ai.settings, "AI_LOOKBACK_TIMEOUT_SECONDS", 0.01)
     session = SlowHistorySession()
     service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(),
                            model=FunctionModel(respond))

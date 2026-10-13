@@ -486,9 +486,11 @@ class AIService:
                         finally:
                             timing.backoff_ms += int((time.monotonic() - backoff_started) * 1000)
 
-            result = await asyncio.wait_for(
-                run_with_transient_retry(), timeout=settings.AI_TIMEOUT_SECONDS,
-            )
+            timeout = {
+                "look_back": settings.AI_LOOKBACK_TIMEOUT_SECONDS,
+                "weekly_summary": settings.AI_WEEKLY_SUMMARY_TIMEOUT_SECONDS,
+            }.get(feature, settings.AI_TIMEOUT_SECONDS)
+            result = await asyncio.wait_for(run_with_transient_retry(), timeout=timeout)
             return result.output
         except APIException:
             raise
