@@ -1,6 +1,6 @@
-from typing import Literal
+from typing import Literal, Self
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     SQLALCHEMY_DATABASE_URI: str = ""
     SQLALCHEMY_ECHO: bool = False
+    DATABASE_TLS_VERIFY: bool = False
     SECURE_COOKIE: bool = True
 
     CORS_ORIGINS: str = "http://localhost:3000,http://localhost:3001,http://localhost:3002"
@@ -47,6 +48,12 @@ class Settings(BaseSettings):
                 "SQLALCHEMY_DATABASE_URI cannot be empty. Set SQLALCHEMY_DATABASE_URI environment variable."
             )
         return v
+
+    @model_validator(mode="after")
+    def require_production_database_tls(self) -> Self:
+        if self.is_production and not self.DATABASE_TLS_VERIFY:
+            raise ValueError("DATABASE_TLS_VERIFY must be enabled in production.")
+        return self
 
     @property
     def is_production(self) -> bool:

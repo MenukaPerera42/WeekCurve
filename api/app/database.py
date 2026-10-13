@@ -1,7 +1,9 @@
+import ssl
 from typing import Annotated
 
 from fastapi import Depends
 from sqlalchemy import event
+from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import (
     AsyncAttrs,
     AsyncSession,
@@ -12,10 +14,23 @@ from sqlalchemy.orm import DeclarativeBase, Mapper
 
 from app.config import settings
 
+database_url = settings.SQLALCHEMY_DATABASE_URI
+connect_args = {}
+if settings.DATABASE_TLS_VERIFY:
+    url = make_url(database_url)
+    if url.drivername != "postgresql+asyncpg":
+        raise ValueError("Verified database TLS requires a postgresql+asyncpg URL.")
+    # Neon supplies libpq options that asyncpg does not accept as connect kwargs.
+    database_url = url.difference_update_query(
+        {"sslmode", "sslrootcert", "sslcert", "sslkey", "channel_binding", "ssl"}
+    )
+    connect_args["ssl"] = ssl.create_default_context()
+
 async_engine = create_async_engine(
-    settings.SQLALCHEMY_DATABASE_URI,
+    database_url,
     echo=settings.SQLALCHEMY_ECHO,
     pool_pre_ping=True,
+    connect_args=connect_args,
 )
 
 AsyncSessionLocal = async_sessionmaker(
