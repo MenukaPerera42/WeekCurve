@@ -6,12 +6,14 @@ import uuid
 from contextlib import suppress
 from dataclasses import dataclass
 from datetime import date
+from functools import wraps
 from typing import Literal, Never
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
 from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.models.google import GoogleModel
+from pydantic_ai.models.wrapper import WrapperModel
 from pydantic_ai.providers.google import GoogleProvider
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -26,6 +28,60 @@ from app.models import (
 
 MODEL = "gemini-3.5-flash-lite"
 MAX_PROVIDER_503_RETRIES = 2
+
+
+@dataclass
+class AITiming:
+    model_calls: int = 0
+    model_call_ms: int = 0
+    tool_calls: int = 0
+    tool_ms: int = 0
+    semantic_validation_calls: int = 0
+    semantic_validation_ms: int = 0
+    backoff_ms: int = 0
+    provider_503_retries: int = 0
+
+
+class TimedModel(WrapperModel):
+    """Measure public model requests without inspecting messages or responses."""
+
+    def __init__(self, wrapped, timing: AITiming):
+        super().__init__(wrapped)
+        self.timing = timing
+
+    async def request(self, messages, model_settings, model_request_parameters):
+        started = time.monotonic()
+        self.timing.model_calls += 1
+        try:
+            return await super().request(messages, model_settings, model_request_parameters)
+        finally:
+            self.timing.model_call_ms += int((time.monotonic() - started) * 1000)
+
+
+def log_ai_timing(feature: str, outcome: str, provider_status: int | None,
+                  latency_ms: int, timing: AITiming) -> None:
+    """Emit one fixed-format event containing only timing and status metadata."""
+    safe_feature = feature if feature in (
+        "brain_dump", "review", "look_back", "weekly_summary", "team_digest",
+    ) else "unknown"
+    safe_outcome = outcome if outcome in (
+        "success", "unavailable", "timeout", "invalid_output", "rate_limited", "failure",
+    ) else "failure"
+    safe_status = (provider_status if type(provider_status) is int
+                   and 100 <= provider_status <= 599 else None)
+    with suppress(Exception):
+        log = logger.warning if safe_outcome != "success" else logger.info
+        log(
+            "ai_%s feature=%s outcome=%s provider_status=%s latency_ms=%d "
+            "model_calls=%d model_call_ms=%d tool_calls=%d tool_ms=%d "
+            "semantic_validation_calls=%d semantic_validation_ms=%d "
+            "provider_503_retries=%d backoff_ms=%d",
+            "failure" if safe_outcome != "success" else "timing",
+            safe_feature, safe_outcome, safe_status, latency_ms,
+            timing.model_calls, timing.model_call_ms, timing.tool_calls, timing.tool_ms,
+            timing.semantic_validation_calls, timing.semantic_validation_ms,
+            timing.provider_503_retries, timing.backoff_ms,
+        )
 
 
 def log_ai_failure(feature: str, outcome: str, provider_status: int | None,
@@ -200,34 +256,41 @@ class LookbackDeps:
     selected_monday: date
     history: list[HistoricalPlan] | None = None
     tool_calls: int = 0
+    timing: AITiming | None = None
 
 
 async def previous_two_plans(ctx: RunContext[LookbackDeps]) -> list[HistoricalPlan]:
     """Retrieve the authorized member's two most recent plans before this week."""
     deps = ctx.deps
     deps.tool_calls += 1
-    plans = (await deps.session.scalars(
-        select(WeeklyPlan).where(
-            WeeklyPlan.organization_id == deps.organization_id,
-            WeeklyPlan.author_membership_id == deps.membership_id,
-            WeeklyPlan.week_start < deps.selected_monday,
-        ).order_by(WeeklyPlan.week_start.desc()).limit(2)
-    )).all()
-    history = []
-    for plan in plans:
-        tasks = (await deps.session.scalars(
-            select(PlanTask).where(
-                PlanTask.organization_id == deps.organization_id,
-                PlanTask.plan_id == plan.id,
-            ).order_by(PlanTask.position, PlanTask.id)
+    started = time.monotonic()
+    try:
+        plans = (await deps.session.scalars(
+            select(WeeklyPlan).where(
+                WeeklyPlan.organization_id == deps.organization_id,
+                WeeklyPlan.author_membership_id == deps.membership_id,
+                WeeklyPlan.week_start < deps.selected_monday,
+            ).order_by(WeeklyPlan.week_start.desc()).limit(2)
         )).all()
-        history.append(HistoricalPlan(
-            id=plan.id, week_start=plan.week_start, status=plan.status,
-            main_shipped=plan.main_shipped,
-            tasks=[HistoricalTask.model_validate(task, from_attributes=True) for task in tasks],
-        ))
-    deps.history = history
-    return history
+        history = []
+        for plan in plans:
+            tasks = (await deps.session.scalars(
+                select(PlanTask).where(
+                    PlanTask.organization_id == deps.organization_id,
+                    PlanTask.plan_id == plan.id,
+                ).order_by(PlanTask.position, PlanTask.id)
+            )).all()
+            history.append(HistoricalPlan(
+                id=plan.id, week_start=plan.week_start, status=plan.status,
+                main_shipped=plan.main_shipped,
+                tasks=[HistoricalTask.model_validate(task, from_attributes=True) for task in tasks],
+            ))
+        deps.history = history
+        return history
+    finally:
+        if deps.timing is not None:
+            deps.timing.tool_calls += 1
+            deps.timing.tool_ms += int((time.monotonic() - started) * 1000)
 
 
 def log_lookback_invalid_output(
@@ -367,10 +430,12 @@ class AIService:
         self.actor_membership_id = actor_membership_id
         self.model = model
         self.last_usage: AIUsage | None = None
+        self.last_timing: AITiming | None = None
 
     async def _run(self, feature: str, output_type, instructions: str, prompt: str,
                    *, deps=None, tool=None, output_validator=None):
         start = time.monotonic()
+        timing = AITiming()
         outcome = "success"
         provider_status = None
         try:
@@ -380,7 +445,7 @@ class AIService:
             model = self.model if self.model is not None else GoogleModel(
                 MODEL, provider=GoogleProvider(api_key=settings.GOOGLE_API_KEY)
             )
-            agent = Agent(model, output_type=output_type,
+            agent = Agent(TimedModel(model, timing), output_type=output_type,
                           instructions=instructions,
                           model_settings={"temperature": 0.0} if feature in ("review", "look_back", "weekly_summary", "team_digest") else None,
                           **({"retries": {"output": 2 if feature == "review" else 1}}
@@ -388,10 +453,24 @@ class AIService:
                           **({"deps_type": LookbackDeps} if deps is not None else {}))
             if tool is not None:
                 agent.tool(tool)
+            if isinstance(deps, LookbackDeps):
+                deps.timing = timing
+
+            def timed_validator(validator):
+                @wraps(validator)
+                def measure(ctx, output):
+                    started = time.monotonic()
+                    timing.semantic_validation_calls += 1
+                    try:
+                        return validator(ctx, output)
+                    finally:
+                        timing.semantic_validation_ms += int((time.monotonic() - started) * 1000)
+                return measure
+
             if feature == "look_back":
-                agent.output_validator(validate_lookback_output)
+                agent.output_validator(timed_validator(validate_lookback_output))
             if output_validator is not None:
-                agent.output_validator(output_validator)
+                agent.output_validator(timed_validator(output_validator))
             async def run_with_transient_retry():
                 for retry in range(MAX_PROVIDER_503_RETRIES + 1):
                     try:
@@ -399,8 +478,13 @@ class AIService:
                     except ModelHTTPError as exc:
                         if exc.status_code != 503 or retry == MAX_PROVIDER_503_RETRIES:
                             raise
+                        timing.provider_503_retries += 1
                         base_delay = 0.25 * 2 ** retry
-                        await asyncio.sleep(random.uniform(base_delay, base_delay * 2))
+                        backoff_started = time.monotonic()
+                        try:
+                            await asyncio.sleep(random.uniform(base_delay, base_delay * 2))
+                        finally:
+                            timing.backoff_ms += int((time.monotonic() - backoff_started) * 1000)
 
             result = await asyncio.wait_for(
                 run_with_transient_retry(), timeout=settings.AI_TIMEOUT_SECONDS,
@@ -432,21 +516,22 @@ class AIService:
             raise APIException(429 if provider_status == 429 else 503, "AI_UNAVAILABLE", message) from exc
         finally:
             latency_ms = int((time.monotonic() - start) * 1000)
+            self.last_timing = timing
             self.last_usage = AIUsage(organization_id=self.organization_id,
                 actor_membership_id=self.actor_membership_id, feature=feature,
                 outcome=outcome, provider_status=provider_status, model=MODEL,
                 latency_ms=latency_ms)
             self.session.add(self.last_usage)
             await self.session.flush()
-            if outcome != "success":
-                log_ai_failure(feature, outcome, provider_status, latency_ms)
+            log_ai_timing(feature, outcome, provider_status, latency_ms, timing)
 
     async def _invalid_output(self) -> None:
         if self.last_usage is not None:
             self.last_usage.outcome = "invalid_output"
             await self.session.flush()
-            log_ai_failure(self.last_usage.feature, "invalid_output",
-                           self.last_usage.provider_status, self.last_usage.latency_ms)
+            log_ai_timing(self.last_usage.feature, "invalid_output",
+                          self.last_usage.provider_status, self.last_usage.latency_ms,
+                          self.last_timing or AITiming())
 
     async def review(self, tasks: list[ReviewTask]) -> PlanReview:
         if sum(t.kind == "main" for t in tasks) != 1:

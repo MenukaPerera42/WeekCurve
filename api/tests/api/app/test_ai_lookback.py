@@ -55,10 +55,12 @@ async def test_runtime_failure_logs_safe_classification_without_changing_respons
     assert len(session.usage) == 1 and session.usage[0].outcome == "failure"
     diagnostics = [record.getMessage() for record in caplog.records
                    if record.getMessage().startswith("ai_failure")]
-    assert diagnostics == [
+    assert len(diagnostics) == 1
+    assert diagnostics[0].startswith(
         "ai_failure feature=look_back outcome=failure provider_status=None "
-        f"latency_ms={session.usage[0].latency_ms}"
-    ]
+        f"latency_ms={session.usage[0].latency_ms} "
+    )
+    assert "model_calls=1" in diagnostics[0]
     assert "private-plan-text-and-provider-detail" not in diagnostics[0]
 
 

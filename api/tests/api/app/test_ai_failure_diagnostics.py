@@ -26,6 +26,16 @@ def failure_events(caplog):
             if record.getMessage().startswith("ai_failure ")]
 
 
+def assert_timed_failure(caplog, prefix):
+    events = failure_events(caplog)
+    assert len(events) == 1
+    assert events[0].startswith(prefix + " ")
+    for field in ("model_calls", "model_call_ms", "tool_calls", "tool_ms",
+                  "semantic_validation_calls", "semantic_validation_ms",
+                  "provider_503_retries", "backoff_ms"):
+        assert f"{field}=" in events[0]
+
+
 def test_untrusted_failure_metadata_is_not_logged(caplog):
     private_text = "private-provider-response"
     with caplog.at_level("WARNING", logger=ai.logger.name):
@@ -59,7 +69,7 @@ async def test_missing_key_logs_unavailable_without_google(caplog, monkeypatch):
     assert len(session.usage) == 1 and session.usage[0].outcome == "unavailable"
     expected = ("ai_failure feature=brain_dump outcome=unavailable "
                 f"provider_status=None latency_ms={session.usage[0].latency_ms}")
-    assert failure_events(caplog) == [expected]
+    assert_timed_failure(caplog, expected)
 
 
 @pytest.mark.asyncio
@@ -96,7 +106,7 @@ async def test_each_ai_feature_logs_one_sanitized_provider_failure(feature, capl
     assert usage.actor_membership_id == member_id
     expected = (f"ai_failure feature={feature} outcome=failure "
                 f"provider_status=503 latency_ms={usage.latency_ms}")
-    assert failure_events(caplog) == [expected]
+    assert_timed_failure(caplog, expected)
     assert all(private_text not in record.getMessage()
                and str(organization_id) not in record.getMessage()
                and str(member_id) not in record.getMessage()
@@ -124,7 +134,7 @@ async def test_timeout_logs_the_existing_outcome_and_error(caplog, monkeypatch):
     assert len(session.usage) == 1 and session.usage[0].outcome == "timeout"
     expected = ("ai_failure feature=weekly_summary outcome=timeout "
                 f"provider_status=None latency_ms={session.usage[0].latency_ms}")
-    assert failure_events(caplog) == [expected]
+    assert_timed_failure(caplog, expected)
 
 
 @pytest.mark.asyncio
@@ -151,7 +161,7 @@ async def test_rate_limit_logs_provider_status_without_response_body(caplog):
     assert session.usage[0].provider_status == 429
     expected = ("ai_failure feature=team_digest outcome=rate_limited "
                 f"provider_status=429 latency_ms={session.usage[0].latency_ms}")
-    assert failure_events(caplog) == [expected]
+    assert_timed_failure(caplog, expected)
     assert all(private_text not in record.getMessage() for record in caplog.records)
 
 
@@ -180,7 +190,7 @@ async def test_structured_output_retry_exhaustion_logs_invalid_output(caplog):
     assert len(session.usage) == 1 and session.usage[0].outcome == "invalid_output"
     expected = ("ai_failure feature=review outcome=invalid_output "
                 f"provider_status=None latency_ms={session.usage[0].latency_ms}")
-    assert failure_events(caplog) == [expected]
+    assert_timed_failure(caplog, expected)
 
 
 @pytest.mark.asyncio
@@ -230,3 +240,78 @@ async def test_logging_failure_does_not_mask_provider_error(monkeypatch):
     assert len(session.usage) == 1
     assert session.usage[0].outcome == "failure"
     assert session.usage[0].provider_status == 503
+
+
+@pytest.mark.asyncio
+async def test_success_timing_counts_model_calls_without_content(caplog):
+    private_text = "private-plan-prompt"
+
+    async def respond(messages, info):
+        await asyncio.sleep(0.01)
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
+            "tasks": [{"kind": "main", "text": "Deliver a tested checkout"}],
+        })])
+
+    session = RecordingSession()
+    service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(),
+                           model=FunctionModel(respond))
+    with caplog.at_level("INFO", logger=ai.logger.name):
+        await service._run("brain_dump", ai.GeneratedPlan, "Instructions", private_text)
+
+    assert len(session.usage) == 1 and session.usage[0].outcome == "success"
+    assert service.last_timing.model_calls == 1
+    assert service.last_timing.model_call_ms > 0
+    events = [record.getMessage() for record in caplog.records
+              if record.getMessage().startswith("ai_timing ")]
+    assert len(events) == 1
+    assert "model_calls=1" in events[0]
+    assert private_text not in events[0]
+
+
+@pytest.mark.asyncio
+async def test_lookback_tool_timeout_records_tool_duration(caplog, monkeypatch):
+    class SlowHistorySession(RecordingSession):
+        async def scalars(self, statement):
+            await asyncio.sleep(0.05)
+
+    async def respond(messages, info):
+        return ModelResponse(parts=[ToolCallPart("previous_two_plans", {})])
+
+    monkeypatch.setattr(ai.settings, "AI_TIMEOUT_SECONDS", 0.01)
+    session = SlowHistorySession()
+    service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(),
+                           model=FunctionModel(respond))
+    with (
+        caplog.at_level("WARNING", logger=ai.logger.name),
+        pytest.raises(APIException) as error,
+    ):
+        await service.look_back(ai.date(2026, 10, 12))
+
+    assert error.value.code == "AI_TIMEOUT"
+    assert len(session.usage) == 1 and session.usage[0].outcome == "timeout"
+    assert service.last_timing.tool_calls == 1
+    assert service.last_timing.tool_ms > 0
+    assert service.last_timing.model_calls == 1
+    assert "tool_calls=1" in failure_events(caplog)[0]
+    assert len(failure_events(caplog)) == 1
+
+
+@pytest.mark.asyncio
+async def test_custom_semantic_validator_is_timed():
+    async def respond(messages, info):
+        return ModelResponse(parts=[ToolCallPart(info.output_tools[0].name, {
+            "tasks": [{"kind": "main", "text": "Deliver a tested checkout"}],
+        })])
+
+    def validate(ctx, output):
+        return output
+
+    session = RecordingSession()
+    service = ai.AIService(session, uuid.uuid4(), uuid.uuid4(),
+                           model=FunctionModel(respond))
+    await service._run("brain_dump", ai.GeneratedPlan, "Instructions", "Prompt",
+                       output_validator=validate)
+
+    assert len(session.usage) == 1 and session.usage[0].outcome == "success"
+    assert service.last_timing.semantic_validation_calls == 1
+    assert service.last_timing.model_calls == 1
