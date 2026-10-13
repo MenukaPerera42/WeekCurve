@@ -1,5 +1,6 @@
 import asyncio
 import json
+import random
 import time
 import uuid
 from contextlib import suppress
@@ -9,7 +10,7 @@ from typing import Literal, Never
 
 from pydantic import BaseModel, Field
 from pydantic_ai import Agent, ModelRetry, RunContext
-from pydantic_ai.exceptions import UnexpectedModelBehavior
+from pydantic_ai.exceptions import ModelHTTPError, UnexpectedModelBehavior
 from pydantic_ai.models.google import GoogleModel
 from pydantic_ai.providers.google import GoogleProvider
 from sqlalchemy import select
@@ -390,8 +391,21 @@ class AIService:
                 agent.output_validator(validate_lookback_output)
             if output_validator is not None:
                 agent.output_validator(output_validator)
-            run = agent.run(prompt, deps=deps) if deps is not None else agent.run(prompt)
-            result = await asyncio.wait_for(run, timeout=settings.AI_TIMEOUT_SECONDS)
+            async def run_with_transient_retry():
+                async def run_once():
+                    return await agent.run(prompt, deps=deps) if deps is not None else await agent.run(prompt)
+
+                try:
+                    return await run_once()
+                except ModelHTTPError as exc:
+                    if exc.status_code != 503:
+                        raise
+                    await asyncio.sleep(random.uniform(0.25, 0.75))
+                    return await run_once()
+
+            result = await asyncio.wait_for(
+                run_with_transient_retry(), timeout=settings.AI_TIMEOUT_SECONDS,
+            )
             return result.output
         except APIException:
             raise
