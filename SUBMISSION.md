@@ -151,7 +151,7 @@ For each frontend (`app/`, `internal/`, and `site/`), TypeScript checks and prod
 - As a Render Free service, the backend may sleep when idle; the initial request after dormancy will take a few moments to spin up.
 - All three optional AI capabilities (Look Back Before Planning, End-of-Week Summary, and Team Digest) are implemented, exceeding the assessment's suggested limit of at most one optional feature (as disclosed above).
 
-**Actual development time:** TODO (submitter): enter the honest total hours spent. This cannot be determined from repository history.
+**Actual development time:** 16 hours.
 
 ## Final archive
 
