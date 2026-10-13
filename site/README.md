@@ -69,10 +69,6 @@ npx shadcn@latest add <component>
 
 ## Code Quality
 
-Git hooks for the whole monorepo are managed by
-[pre-commit](https://pre-commit.com) at the repo root — oxfmt, oxlint, and
-`tsc` run automatically on staged `site/` files before each commit. See the
-[root README](../README.md#git-hooks) for setup.
 Code quality checks across the monorepo use oxfmt, oxlint, and
 `tsc` on `site/` files. See the [root README](../README.md) for quality checks.
 
@@ -99,12 +95,8 @@ npm run validate       # type-check + lint + format:check
 make build             # -> dist/client/
 ```
 
-### Cloudflare Static Hosting
 ### Production Hosting (Vercel)
 
-Like `app/`, this template is optimized for deployment on **Cloudflare
-Pages**. Publish the `dist/client/` directory — it contains the prerendered
-HTML plus hashed assets, with no server component.
 The marketing website is hosted on **Vercel** at [https://weekcurve-site.vercel.app/](https://weekcurve-site.vercel.app/).
 
 The build produces static prerendered HTML and hashed assets in `dist/client/` (configured in `vercel.json`), deploying as a pure static Jamstack site without server runtime dependencies.

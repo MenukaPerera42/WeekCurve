@@ -27,7 +27,6 @@ The complete WeekCurve application suite is deployed and publicly accessible:
 
 ## Stack and prerequisites
 
-- API: Python 3.12, uv, FastAPI, Pydantic AI, async SQLAlchemy, Alembic, PostgreSQL 16.
 - API: Python 3.12, uv, FastAPI, Pydantic AI, async SQLAlchemy, Alembic, PostgreSQL 16 (local development baseline) and PostgreSQL 18.6 (Neon production).
 - Customer app and staff console: React, TypeScript, TanStack Start, TanStack Query, and Orval-generated API clients.
 - Marketing site: statically generated TanStack Start.
@@ -65,7 +64,6 @@ cd internal && npm ci && make run  # http://localhost:3002
 cd site && npm ci && make run      # http://localhost:3000
 ```
 
-The committed development frontend environment files point to the local API or customer app. For deployment, set the public `VITE_API_URL` in `app/.env.production` and `internal/.env.production`, and `VITE_APP_URL` in `site/.env.production`, to the real destinations before building. **TODO (deployment owner):** supply those URLs if deploying; deployment itself is outside this assessment.
 The committed development frontend environment files point to the local API or customer app. In production, the frontends are hosted on Vercel: `app/vercel.json` and `internal/vercel.json` rewrite `/app/*` and `/internal/*` to the FastAPI backend on Render (https://weekcurve-api.onrender.com), preserving same-origin cookie handling, while `site/` links to the live customer app.
 
 ## Demo data and logins
@@ -95,10 +93,8 @@ uv run manage.py create-user \
 
 The CLI prints a generated password if `--password` is omitted. Keep that credential private. **TODO (submitter):** confirm the intended demo password and staff login setup privately before handing the archive to a reviewer; do not publish a real user's credential.
 
-## Gemini configuration
 ## Gemini configuration and AI features
 
-AI is optional for manual planning. To enable it, place a Google AI Studio key only in the ignored `api/.env` as `GOOGLE_API_KEY`; leave `api/.env.example` blank. The backend uses Pydantic AI structured outputs with `google:gemini-3.5-flash-lite`. The key is never sent to a frontend. AI drafts fill an editable form and are not saved until the member chooses Save Draft.
 AI features use Pydantic AI structured outputs with `google:gemini-3.5-flash-lite`. AI is optional for manual planning; to enable it locally, place a Google AI Studio key in the ignored `api/.env` as `GOOGLE_API_KEY` (leave `api/.env.example` blank). The key is never sent to a frontend. AI drafts fill an editable form and are not saved until the member chooses Save Draft.
 
 ### Implemented AI Capabilities
@@ -133,11 +129,8 @@ For each of `app/`, `internal/`, and `site/`, run `npm run validate` and `npm ru
 
 ## Limits, tradeoffs, and time
 
-- Invitations are copied as links rather than sent by email, as permitted by the assessment. Email verification, password reset, billing, SSO, and deployment are outside its requested scope.
 - Invitations are copied as links rather than sent by email, as permitted by the assessment. Email verification, password reset, billing, and SSO are outside its requested scope. Live deployment has been fully provisioned across Vercel, Render, and Neon.
 - Gemini review quality can vary, and provider quotas or outages may prevent a review. Manual plan editing and submission remain available.
-- Production frontend URLs still need real deployment values if the applications are published. Verify migration, seed, demo logins, and navigation from a fresh extraction before submitting.
-- Optional end-of-week AI summary, look-back tool, and team digest were not built; the core tenant, planning, and AI workflows took priority.
 - As a Render Free service, the backend may sleep when idle; the initial request after dormancy will take a few moments to spin up.
 - All three optional AI capabilities (Look Back Before Planning, End-of-Week Summary, and Team Digest) are implemented, exceeding the assessment's suggested limit of at most one optional feature (as disclosed above).
 

@@ -23,7 +23,6 @@ uv run alembic upgrade head              # apply migrations
 uv run fastapi dev                       # http://localhost:8000
 ```
 
-Git hooks are managed at the repo root — see the [root README](../README.md#git-hooks).
 Code quality checks across the monorepo use Ruff and Pyright — see the [root README](../README.md) for quality checks.
 
 App API docs: <http://localhost:8000/app/docs>
