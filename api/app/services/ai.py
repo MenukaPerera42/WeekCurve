@@ -447,7 +447,7 @@ class AIService:
             )
             agent = Agent(TimedModel(model, timing), output_type=output_type,
                           instructions=instructions,
-                          model_settings={"temperature": 0.0} if feature in ("review", "look_back", "weekly_summary", "team_digest") else None,
+                          model_settings={"thinking": "minimal"},
                           **({"retries": {"output": 2 if feature == "review" else 1}}
                              if feature in ("review", "look_back", "weekly_summary", "team_digest") else {}),
                           **({"deps_type": LookbackDeps} if deps is not None else {}))
