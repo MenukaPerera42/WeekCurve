@@ -16,7 +16,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
-const appUrl = import.meta.env["VITE_APP_URL"] || "http://localhost:3001";
+const appUrl = import.meta.env["VITE_APP_URL"] || "http://localhost:3000";
 
 export const Route = createFileRoute("/")({
   head: () => ({
